@@ -1,5 +1,18 @@
 import React, { useState } from 'react';
-import { FileSpreadsheet, FileText, Download, Egg, DollarSign, HardHat, Wheat, Sparkles, CheckCircle2 } from 'lucide-react';
+import { 
+  FileSpreadsheet, 
+  FileText, 
+  Download, 
+  Egg, 
+  DollarSign, 
+  HardHat, 
+  Wheat, 
+  Sparkles, 
+  CheckCircle2,
+  Calendar,
+  ArrowUpDown,
+  Filter
+} from 'lucide-react';
 import { runQuery, getFarmMetrics } from '../wasm/db';
 import { exportToPdf, exportToExcel } from '../utils/reportExporter';
 
@@ -7,18 +20,60 @@ export default function ReportsPage({ currentUser }) {
   const [downloading, setDownloading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
 
+  // Time Sorting & Filtering State
+  const [timePreset, setTimePreset] = useState('all'); // 'all' | 'today' | '7days' | 'month' | 'custom'
+  const [sortOrder, setSortOrder] = useState('desc'); // 'desc' (Newest First) | 'asc' (Oldest First)
+  
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [startDate, setStartDate] = useState('2026-01-01');
+  const [endDate, setEndDate] = useState(todayStr);
+
+  // Helper to compute date condition for SQL
+  const getDateCondition = (dateColumn) => {
+    if (timePreset === 'today') {
+      return `${dateColumn} = '${todayStr}'`;
+    }
+    if (timePreset === '7days') {
+      const d = new Date();
+      d.setDate(d.getDate() - 7);
+      const sevenDaysAgo = d.toISOString().split('T')[0];
+      return `${dateColumn} >= '${sevenDaysAgo}'`;
+    }
+    if (timePreset === 'month') {
+      const d = new Date();
+      const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+      return `${dateColumn} >= '${firstDay}'`;
+    }
+    if (timePreset === 'custom') {
+      return `${dateColumn} >= '${startDate}' AND ${dateColumn} <= '${endDate}'`;
+    }
+    return '1=1'; // All time
+  };
+
+  const getTimeLabel = () => {
+    if (timePreset === 'today') return `Today (${todayStr})`;
+    if (timePreset === '7days') return 'Past 7 Days';
+    if (timePreset === 'month') return 'Current Month';
+    if (timePreset === 'custom') return `From ${startDate} to ${endDate}`;
+    return 'All Available Records';
+  };
+
   // 1. Egg Production Report Generator
   const handleExportEggs = async (format) => {
     setDownloading(true);
     setStatusMsg('Generating Egg Production Report...');
 
     try {
+      const whereClause = getDateCondition('e.production_date');
+      const orderDirection = sortOrder.toUpperCase();
+
       const records = runQuery(`
         SELECT e.production_date, b.building_name, cat.category_name, e.eggs_collected, e.broken_eggs, e.remaining_eggs
         FROM egg_production e
         LEFT JOIN buildings b ON e.building_id = b.id
         LEFT JOIN chicken_categories cat ON e.category_id = cat.id
-        ORDER BY e.production_date DESC
+        WHERE ${whereClause}
+        ORDER BY e.production_date ${orderDirection}, e.building_id
       `);
 
       const headers = ['Date', 'Building / Shed', 'Category', 'Collected', 'Broken', 'Net Available'];
@@ -35,10 +90,12 @@ export default function ReportsPage({ currentUser }) {
       const totalBroken = records.reduce((a, b) => a + Number(b.broken_eggs), 0);
       const totalNet = records.reduce((a, b) => a + Number(b.remaining_eggs), 0);
 
+      const subtitle = `Time Filter: ${getTimeLabel()} | Sorted: ${sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'} (${records.length} records)`;
+
       if (format === 'pdf') {
         await exportToPdf({
           title: 'Egg Harvest & Building Production Report',
-          subtitle: 'Detailed record of egg collection, breakage rates, and net available yield per shed.',
+          subtitle,
           headers,
           rows,
           summaryCards: [
@@ -46,18 +103,18 @@ export default function ReportsPage({ currentUser }) {
             { label: 'Total Broken', value: totalBroken.toLocaleString(), color: 'rose' },
             { label: 'Net Available', value: totalNet.toLocaleString(), color: 'emerald' }
           ],
-          filename: 'beacon_fam_egg_production',
+          filename: `beacon_fam_egg_production_${timePreset}`,
           generatedBy: currentUser?.full_name || currentUser?.username
         });
       } else {
         exportToExcel({
-          title: 'Egg Harvest & Building Production Report',
+          title: `Egg Harvest & Building Production Report — ${getTimeLabel()}`,
           headers,
           rows,
-          filename: 'beacon_fam_egg_production'
+          filename: `beacon_fam_egg_production_${timePreset}`
         });
       }
-      setStatusMsg('Egg Production Report downloaded!');
+      setStatusMsg(`Egg Production Report downloaded (${records.length} records)!`);
     } catch (err) {
       console.error(err);
       setStatusMsg('Failed to generate report.');
@@ -72,11 +129,15 @@ export default function ReportsPage({ currentUser }) {
     setStatusMsg('Generating Sales & Revenue Report...');
 
     try {
+      const whereClause = getDateCondition('s.sale_date');
+      const orderDirection = sortOrder.toUpperCase();
+
       const records = runQuery(`
         SELECT s.sale_date, c.customer_name, c.phone, s.quantity, s.unit_price, s.total_amount
         FROM sales s
         LEFT JOIN customers c ON s.customer_id = c.id
-        ORDER BY s.sale_date DESC
+        WHERE ${whereClause}
+        ORDER BY s.sale_date ${orderDirection}
       `);
 
       const headers = ['Sale Date', 'Customer Name', 'Phone', 'Quantity (Eggs)', 'Unit Price (RWF)', 'Total Revenue (RWF)'];
@@ -91,11 +152,12 @@ export default function ReportsPage({ currentUser }) {
 
       const totalRevenue = records.reduce((a, b) => a + Number(b.total_amount), 0);
       const totalEggsSold = records.reduce((a, b) => a + Number(b.quantity), 0);
+      const subtitle = `Time Filter: ${getTimeLabel()} | Sorted: ${sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'} (${records.length} sales)`;
 
       if (format === 'pdf') {
         await exportToPdf({
           title: 'Sales & Revenue Financial Report',
-          subtitle: 'Commercial egg sales revenue, customer transactions, and unit price audit.',
+          subtitle,
           headers,
           rows,
           summaryCards: [
@@ -103,18 +165,18 @@ export default function ReportsPage({ currentUser }) {
             { label: 'Total Eggs Sold', value: totalEggsSold.toLocaleString(), color: 'emerald' },
             { label: 'Total Transactions', value: records.length.toString(), color: 'emerald' }
           ],
-          filename: 'beacon_fam_sales_revenue',
+          filename: `beacon_fam_sales_revenue_${timePreset}`,
           generatedBy: currentUser?.full_name || currentUser?.username
         });
       } else {
         exportToExcel({
-          title: 'Sales & Revenue Financial Report',
+          title: `Sales & Revenue Financial Report — ${getTimeLabel()}`,
           headers,
           rows,
-          filename: 'beacon_fam_sales_revenue'
+          filename: `beacon_fam_sales_revenue_${timePreset}`
         });
       }
-      setStatusMsg('Sales Report downloaded!');
+      setStatusMsg(`Sales Report downloaded (${records.length} sales)!`);
     } catch (err) {
       console.error(err);
       setStatusMsg('Failed to generate sales report.');
@@ -129,65 +191,70 @@ export default function ReportsPage({ currentUser }) {
     setStatusMsg('Generating Labor & Construction Expense Report...');
 
     try {
+      const pWhere = getDateCondition('p.payment_date');
+      const cWhere = getDateCondition('expense_date');
+      const orderDirection = sortOrder.toUpperCase();
+
       const payroll = runQuery(`
-        SELECT p.payment_date, w.full_name, w.role, p.days_worked, p.amount_paid, p.notes
+        SELECT p.payment_date as event_date, w.full_name as title, 'Worker Wage Payroll' as category, 
+               p.days_worked || ' days worked (' || COALESCE(p.notes, '-') || ')' as details, p.amount_paid as amount
         FROM worker_payments p
         LEFT JOIN workers w ON p.worker_id = w.id
-        ORDER BY p.payment_date DESC
+        WHERE ${pWhere}
       `);
 
       const construction = runQuery(`
-        SELECT expense_date, description, category, vendor, amount, notes
+        SELECT expense_date as event_date, description as title, 'Construction (' || category || ')' as category,
+               'Vendor: ' || COALESCE(vendor, 'Direct') || ' (' || COALESCE(notes, '-') || ')' as details, amount
         FROM construction_expenses
-        ORDER BY expense_date DESC
+        WHERE ${cWhere}
       `);
 
-      const headers = ['Date', 'Expense Category', 'Title / Worker / Vendor', 'Details', 'Amount Paid (RWF)'];
-      
-      const rows = [
-        ...payroll.map(p => [
-          p.payment_date,
-          'Worker Wage Payroll',
-          p.full_name || ('Staff #' + p.worker_id),
-          `${p.days_worked} days worked (${p.notes || '-'})`,
-          `RWF ${Number(p.amount_paid).toLocaleString()}`
-        ]),
-        ...construction.map(c => [
-          c.expense_date,
-          `Construction (${c.category})`,
-          c.description,
-          `Vendor: ${c.vendor || 'Direct'} (${c.notes || '-'})`,
-          `RWF ${Number(c.amount).toLocaleString()}`
-        ])
-      ];
+      // Combine and sort by date
+      let combined = [...payroll, ...construction];
+      combined.sort((a, b) => {
+        if (sortOrder === 'desc') {
+          return new Date(b.event_date) - new Date(a.event_date);
+        } else {
+          return new Date(a.event_date) - new Date(b.event_date);
+        }
+      });
 
-      const totalWages = payroll.reduce((a, b) => a + Number(b.amount_paid), 0);
-      const totalConstruction = construction.reduce((a, b) => a + Number(b.amount), 0);
-      const grandTotal = totalWages + totalConstruction;
+      const headers = ['Date', 'Expense Category', 'Title / Worker / Vendor', 'Details', 'Amount Paid (RWF)'];
+      const rows = combined.map(item => [
+        item.event_date,
+        item.category,
+        item.title || 'Staff Expense',
+        item.details,
+        `RWF ${Number(item.amount).toLocaleString()}`
+      ]);
+
+      const grandTotal = combined.reduce((a, b) => a + Number(b.amount), 0);
+      const subtitle = `Time Filter: ${getTimeLabel()} | Sorted: ${sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'} (${combined.length} expense records)`;
 
       if (format === 'pdf') {
         await exportToPdf({
           title: 'Workers Payroll & Construction Expenses Report',
-          subtitle: 'Complete breakdown of farm employee wages, building maintenance, and capital projects.',
+          subtitle,
           headers,
           rows,
           summaryCards: [
-            { label: 'Total Payroll Paid', value: `RWF ${totalWages.toLocaleString()}`, color: 'emerald' },
-            { label: 'Total Construction', value: `RWF ${totalConstruction.toLocaleString()}`, color: 'rose' },
-            { label: 'Grand Total Expenses', value: `RWF ${grandTotal.toLocaleString()}`, color: 'rose' }
+            { label: 'Time Scope', value: getTimeLabel(), color: 'emerald' },
+            { label: 'Total Expense Records', value: combined.length.toString(), color: 'emerald' },
+            { label: 'Grand Total Expense', value: `RWF ${grandTotal.toLocaleString()}`, color: 'rose' }
           ],
-          filename: 'beacon_fam_labor_construction_expenses',
+          filename: `beacon_fam_labor_construction_${timePreset}`,
           generatedBy: currentUser?.full_name || currentUser?.username
         });
       } else {
         exportToExcel({
-          title: 'Workers Payroll & Construction Expenses Report',
+          title: `Workers Payroll & Construction Expenses Report — ${getTimeLabel()}`,
           headers,
           rows,
-          filename: 'beacon_fam_labor_construction_expenses'
+          filename: `beacon_fam_labor_construction_${timePreset}`
         });
       }
-      setStatusMsg('Expenses Report downloaded!');
+      setStatusMsg(`Expenses Report downloaded (${combined.length} records)!`);
     } catch (err) {
       console.error(err);
       setStatusMsg('Failed to generate expenses report.');
@@ -203,9 +270,12 @@ export default function ReportsPage({ currentUser }) {
 
     try {
       const metrics = getFarmMetrics();
+      const subtitle = `Time Filter Scope: ${getTimeLabel()} | Audit Sort: ${sortOrder === 'desc' ? 'Latest First' : 'Chronological'}`;
+
       const headers = ['Metric Category', 'Key Performance Indicator', 'Value', 'Status / Audit Notes'];
       const rows = [
-        ['Flock Management', 'Total Active Chickens', metrics.totalChickens.toLocaleString(), 'Healthy Flock'],
+        ['Time Range Filter', 'Selected Scope', getTimeLabel(), sortOrder === 'desc' ? 'Sorted Newest First ⬇️' : 'Sorted Oldest First ⬆️'],
+        ['Flock Management', 'Total Active Chickens', metrics.totalChickens.toLocaleString(), 'Active Flock'],
         ['Flock Management', 'Mortality Deaths', metrics.totalDeaths.toLocaleString(), `${metrics.mortalityRate}% Mortality Rate`],
         ['Egg Production', 'Cumulative Eggs Harvested', metrics.totalEggs.toLocaleString(), `${metrics.eggsPerChicken} eggs / chicken average`],
         ['Commercial Sales', 'Total Revenue Generated', `RWF ${metrics.totalRevenue.toLocaleString()}`, `${metrics.totalCustomers} Active Buyers`],
@@ -218,7 +288,7 @@ export default function ReportsPage({ currentUser }) {
       if (format === 'pdf') {
         await exportToPdf({
           title: 'BEACON FAM — Master Executive Operations Report',
-          subtitle: 'Consolidated summary of flock count, egg harvest, revenue, expenses, and overall status.',
+          subtitle,
           headers,
           rows,
           summaryCards: [
@@ -226,15 +296,15 @@ export default function ReportsPage({ currentUser }) {
             { label: 'Total Sales Revenue', value: `RWF ${metrics.totalRevenue.toLocaleString()}`, color: 'emerald' },
             { label: 'Total Labor/Capital', value: `RWF ${metrics.totalExpenses.toLocaleString()}`, color: 'rose' }
           ],
-          filename: 'beacon_fam_master_executive_report',
+          filename: `beacon_fam_master_executive_${timePreset}`,
           generatedBy: currentUser?.full_name || currentUser?.username
         });
       } else {
         exportToExcel({
-          title: 'BEACON FAM — Master Executive Operations Report',
+          title: `BEACON FAM — Master Executive Operations Report (${getTimeLabel()})`,
           headers,
           rows,
-          filename: 'beacon_fam_master_executive_report'
+          filename: `beacon_fam_master_executive_${timePreset}`
         });
       }
       setStatusMsg('Master Executive Report downloaded!');
@@ -248,7 +318,7 @@ export default function ReportsPage({ currentUser }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
-      {/* Header */}
+      {/* Page Header */}
       <div>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <FileSpreadsheet color="var(--accent-emerald)" /> Reports & Document Exports
@@ -256,6 +326,66 @@ export default function ReportsPage({ currentUser }) {
         <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
           Export official BEACON FAM operational and financial documents in PDF and Excel (.xlsx) formats.
         </p>
+      </div>
+
+      {/* Global Time Filter & Sorting Control Toolbar */}
+      <div className="card" style={{
+        background: 'rgba(30, 41, 59, 0.5)',
+        border: '1px solid var(--border-color)',
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '1rem',
+        padding: '1.25rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-emerald)' }}>
+            <Filter size={16} /> <span>Time Range Filter:</span>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
+            {[
+              { id: 'all', label: 'All Time' },
+              { id: 'today', label: 'Today' },
+              { id: '7days', label: 'Past 7 Days' },
+              { id: 'month', label: 'This Month' },
+              { id: 'custom', label: 'Custom Range' },
+            ].map(p => (
+              <button
+                key={p.id}
+                onClick={() => setTimePreset(p.id)}
+                className={`btn btn-sm ${timePreset === p.id ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.75rem', padding: '0.375rem 0.75rem' }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {timePreset === 'custom' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-primary)', padding: '0.25rem 0.5rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <Calendar size={14} color="var(--text-muted)" />
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '0.75rem' }} />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-subtle)' }}>to</span>
+              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '0.75rem' }} />
+            </div>
+          )}
+        </div>
+
+        {/* Time Sorting Control */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-sky)', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            <ArrowUpDown size={16} /> Sort Order:
+          </span>
+          <button
+            onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+            className="btn btn-secondary btn-sm"
+            style={{ fontSize: '0.85rem', fontWeight: 700 }}
+          >
+            {sortOrder === 'desc' ? '⬇️ Newest First (Latest Date)' : '⬆️ Oldest First (Chronological)'}
+          </button>
+        </div>
       </div>
 
       {statusMsg && (
@@ -278,9 +408,12 @@ export default function ReportsPage({ currentUser }) {
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Consolidated operational & financial summary</div>
             </div>
           </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
             Combines flock count, egg harvest, commercial sales revenue, feed stock, worker wages, and construction expenses into a single audit document.
           </p>
+          <div style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)', fontWeight: 700, marginBottom: '1rem' }}>
+            Filtered: {getTimeLabel()} ({sortOrder === 'desc' ? 'Newest First' : 'Oldest First'})
+          </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button onClick={() => handleExportMaster('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
               <FileText size={16} /> Export PDF
@@ -302,9 +435,12 @@ export default function ReportsPage({ currentUser }) {
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Per-building daily harvest logs</div>
             </div>
           </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
             Detailed breakdown of total eggs collected, broken eggs, and net yield across Building A, Building B, and Building C.
           </p>
+          <div style={{ fontSize: '0.75rem', color: 'var(--accent-amber)', fontWeight: 700, marginBottom: '1rem' }}>
+            Filtered: {getTimeLabel()} ({sortOrder === 'desc' ? 'Newest First' : 'Oldest First'})
+          </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button onClick={() => handleExportEggs('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
               <FileText size={16} /> Export PDF
@@ -326,9 +462,12 @@ export default function ReportsPage({ currentUser }) {
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Commercial egg sales & customer ledger</div>
             </div>
           </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
             List of customer transactions, egg quantities sold, unit pricing, and total revenue in RWF.
           </p>
+          <div style={{ fontSize: '0.75rem', color: 'var(--accent-sky)', fontWeight: 700, marginBottom: '1rem' }}>
+            Filtered: {getTimeLabel()} ({sortOrder === 'desc' ? 'Newest First' : 'Oldest First'})
+          </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button onClick={() => handleExportSales('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
               <FileText size={16} /> Export PDF
@@ -350,9 +489,12 @@ export default function ReportsPage({ currentUser }) {
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Worker wages & capital project costs</div>
             </div>
           </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
             Audit log of employee wage disbursements, daily rates, roof repairs, feed silos, plumbing, and solar installation costs.
           </p>
+          <div style={{ fontSize: '0.75rem', color: 'var(--accent-rose)', fontWeight: 700, marginBottom: '1rem' }}>
+            Filtered: {getTimeLabel()} ({sortOrder === 'desc' ? 'Newest First' : 'Oldest First'})
+          </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button onClick={() => handleExportExpenses('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
               <FileText size={16} /> Export PDF
