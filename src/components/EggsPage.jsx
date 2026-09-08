@@ -112,9 +112,11 @@ export default function EggsPage({ onRefreshData }) {
             Track daily harvests from Building A, B, and C separately. All totals computed automatically.
           </p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus size={18} /> Record Egg Harvest
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">
+            <Plus size={18} /> Record Egg Harvest
+          </button>
+        </div>
       </div>
 
       {/* Grand Total Banner */}

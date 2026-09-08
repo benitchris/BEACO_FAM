@@ -1,7 +1,7 @@
 import initSqlJs from 'sql.js';
 
 let db = null;
-const STORAGE_KEY = 'BEACO_FARM_WASM_SQLITE_DB_v2';
+const STORAGE_KEY = 'BEACON_FAM_WASM_SQLITE_DB_v3';
 
 // Determine base path for WASM file (works both locally and on GitHub Pages)
 const BASE_URL = import.meta.env.BASE_URL || '/';
@@ -156,7 +156,9 @@ INSERT INTO buildings (id, building_name, capacity, description) VALUES
 (3, 'Building C', 300, 'Chick nursery - West Wing');
 
 INSERT INTO users (full_name, username, password, role) VALUES
-('Administrator', 'admin', 'admin123', 'Administrator');
+('System Administrator', 'admin', 'admin@123', 'Admin'),
+('Sales Manager', 'sales', 'sales@123', 'Sales'),
+('Construction Lead', 'construction', 'construction@123', 'Construction');
 
 INSERT INTO chickens (chicken_code, category_id, building_id, breed, quantity, age_in_weeks, date_added, status) VALUES
 ('CHK-101', 1, 1, 'Lohmann Brown', 450, 24, '2026-01-15', 'Active'),
@@ -329,3 +331,59 @@ export function getFarmMetrics() {
     workerCount
   };
 }
+
+// User Authentication & Management Helpers
+export function authenticateUser(username, password) {
+  const users = runQuery(
+    "SELECT id, full_name, username, role, created_at FROM users WHERE username = ? AND password = ?",
+    [username, password]
+  );
+  if (users && users.length > 0) {
+    return users[0];
+  }
+  return null;
+}
+
+export function getAllUsers() {
+  return runQuery("SELECT id, full_name, username, role, created_at FROM users ORDER BY id ASC");
+}
+
+export function createUser(fullName, username, password, role) {
+  const existing = runQuery("SELECT id FROM users WHERE username = ?", [username]);
+  if (existing && existing.length > 0) {
+    throw new Error(`Username "${username}" already exists!`);
+  }
+  executeSql(`
+    INSERT INTO users (full_name, username, password, role)
+    VALUES ('${fullName.replace(/'/g, "''")}', '${username.replace(/'/g, "''")}', '${password.replace(/'/g, "''")}', '${role}')
+  `);
+  return true;
+}
+
+export function updateUser(id, fullName, role, password = null) {
+  if (password && password.trim() !== '') {
+    executeSql(`
+      UPDATE users 
+      SET full_name = '${fullName.replace(/'/g, "''")}', role = '${role}', password = '${password.replace(/'/g, "''")}'
+      WHERE id = ${id}
+    `);
+  } else {
+    executeSql(`
+      UPDATE users 
+      SET full_name = '${fullName.replace(/'/g, "''")}', role = '${role}'
+      WHERE id = ${id}
+    `);
+  }
+  return true;
+}
+
+export function deleteUser(id) {
+  executeSql(`DELETE FROM users WHERE id = ${id}`);
+  return true;
+}
+
+export function updatePassword(userId, newPassword) {
+  executeSql(`UPDATE users SET password = '${newPassword.replace(/'/g, "''")}' WHERE id = ${userId}`);
+  return true;
+}
+

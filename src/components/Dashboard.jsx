@@ -44,7 +44,7 @@ export default function Dashboard({ metrics, onNavigate, onRunPython }) {
             <span>WebAssembly Engine Active</span>
           </div>
           <h1 style={{ fontSize: '1.875rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-            BEACO Poultry Farm Dashboard
+            BEACON FAM Operations Dashboard
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9375rem', maxWidth: '600px' }}>
             Real-time poultry flock management, egg harvest logging, feed stock monitoring, and WebAssembly Python analytics.

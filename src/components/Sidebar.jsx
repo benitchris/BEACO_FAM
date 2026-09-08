@@ -10,40 +10,56 @@ import {
   Terminal, 
   Database,
   Cpu,
-  HardHat
+  HardHat,
+  FileSpreadsheet,
+  Settings,
+  ShieldCheck
 } from 'lucide-react';
 
-export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'chickens', label: 'Chickens / Flock', icon: Bird },
-    { id: 'eggs', label: 'Egg Production', icon: Egg },
-    { id: 'expenses', label: 'Workers & Expenses', icon: HardHat },
-    { id: 'sales', label: 'Sales & Revenue', icon: DollarSign },
-    { id: 'feed', label: 'Feed Inventory', icon: Wheat },
-    { id: 'mortality', label: 'Mortality Tracker', icon: Skull },
-    { id: 'vaccination', label: 'Vaccination Log', icon: Syringe },
-    { id: 'python', label: 'Python WASM Studio', icon: Terminal, badge: 'WASM' },
-    { id: 'database', label: 'SQLite Console', icon: Database, badge: 'WASM' },
+export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentUser }) {
+  const role = currentUser?.role || 'Admin';
+
+  const allNavItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['Admin', 'Sales', 'Construction', 'Employee'] },
+    { id: 'chickens', label: 'Chickens / Flock', icon: Bird, roles: ['Admin', 'Construction', 'Employee'] },
+    { id: 'eggs', label: 'Egg Production', icon: Egg, roles: ['Admin', 'Sales', 'Construction', 'Employee'] },
+    { id: 'expenses', label: 'Workers & Expenses', icon: HardHat, roles: ['Admin', 'Construction'] },
+    { id: 'sales', label: 'Sales & Revenue', icon: DollarSign, roles: ['Admin', 'Sales'] },
+    { id: 'feed', label: 'Feed Inventory', icon: Wheat, roles: ['Admin', 'Construction'] },
+    { id: 'mortality', label: 'Mortality Tracker', icon: Skull, roles: ['Admin', 'Construction'] },
+    { id: 'vaccination', label: 'Vaccination Log', icon: Syringe, roles: ['Admin', 'Construction'] },
+    { id: 'reports', label: 'Reports & Exports', icon: FileSpreadsheet, roles: ['Admin', 'Sales', 'Construction'], badge: 'PDF/XLS' },
+    { id: 'settings', label: 'Settings & Users', icon: Settings, roles: ['Admin', 'Sales', 'Construction'] },
+    { id: 'python', label: 'Python WASM Studio', icon: Terminal, roles: ['Admin'], badge: 'WASM' },
+    { id: 'database', label: 'SQLite Console', icon: Database, roles: ['Admin'], badge: 'WASM' },
   ];
+
+  // Filter items based on logged in role
+  const navItems = allNavItems.filter(item => item.roles.includes(role));
 
   return (
     <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-      <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+      <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
         <div style={{
-          background: 'linear-gradient(135deg, #10b981, #059669)',
-          padding: '0.5rem',
-          borderRadius: '10px',
+          width: 44,
+          height: 44,
+          borderRadius: '50%',
+          padding: '2px',
+          background: 'linear-gradient(135deg, #10b981, #f59e0b)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'white'
+          flexShrink: 0
         }}>
-          <Bird size={24} />
+          <img 
+            src="./logo.png" 
+            alt="BEACON FAM Logo" 
+            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', background: '#fff' }} 
+          />
         </div>
         <div>
-          <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1.2 }}>BEACO FARM</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.7rem', color: 'var(--accent-emerald)', fontWeight: 700 }}>
+          <h2 style={{ fontSize: '1.15rem', fontWeight: 900, color: 'var(--text-main)', lineHeight: 1.1, letterSpacing: '-0.01em' }}>BEACON FAM</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.7rem', color: 'var(--accent-emerald)', fontWeight: 700, marginTop: '0.2rem' }}>
             <Cpu size={12} />
             <span>WebAssembly 2.0</span>
           </div>
@@ -51,8 +67,13 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
       </div>
 
       <nav style={{ padding: '1rem', flex: 1, overflowY: 'auto' }}>
-        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', paddingLeft: '0.75rem' }}>
-          Management
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', paddingLeft: '0.75rem', paddingRight: '0.75rem' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Navigation
+          </span>
+          <span className="badge badge-sky" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>
+            {role}
+          </span>
         </div>
 
         {navItems.map((item) => {
@@ -98,8 +119,10 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
 
       <div style={{ padding: '1rem', borderTop: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.1)' }}>
         <div style={{ fontSize: '0.75rem', color: 'var(--text-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Storage Mode</span>
-          <span style={{ color: 'var(--accent-emerald)', fontWeight: 700 }}>IndexedDB / WASM</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            <ShieldCheck size={14} color="var(--accent-emerald)" /> {currentUser?.username || 'User'}
+          </span>
+          <span style={{ color: 'var(--accent-emerald)', fontWeight: 700 }}>{role}</span>
         </div>
       </div>
     </aside>
