@@ -9,7 +9,8 @@ import {
   Syringe, 
   Terminal, 
   Database,
-  Cpu
+  Cpu,
+  HardHat
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
@@ -17,6 +18,7 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'chickens', label: 'Chickens / Flock', icon: Bird },
     { id: 'eggs', label: 'Egg Production', icon: Egg },
+    { id: 'expenses', label: 'Workers & Expenses', icon: HardHat },
     { id: 'sales', label: 'Sales & Revenue', icon: DollarSign },
     { id: 'feed', label: 'Feed Inventory', icon: Wheat },
     { id: 'mortality', label: 'Mortality Tracker', icon: Skull },

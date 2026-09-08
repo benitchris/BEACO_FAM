@@ -10,7 +10,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   ArrowRight,
-  Sparkles
+  Sparkles,
+  HardHat
 } from 'lucide-react';
 
 export default function Dashboard({ metrics, onNavigate, onRunPython }) {
@@ -107,6 +108,19 @@ export default function Dashboard({ metrics, onNavigate, onRunPython }) {
             <div className="stat-val">{metrics.feedRemaining.toLocaleString()} <span style={{ fontSize: '1rem', fontWeight: 600 }}>kg</span></div>
             <div style={{ fontSize: '0.75rem', color: metrics.feedRemaining < 100 ? 'var(--accent-rose)' : 'var(--text-muted)', marginTop: '0.25rem', fontWeight: 600 }}>
               {metrics.feedRemaining < 100 ? 'Low Stock Warning' : 'Optimal Inventory'}
+            </div>
+          </div>
+        </div>
+
+        <div className="card stat-card card-hover" onClick={() => onNavigate('expenses')} style={{ cursor: 'pointer' }}>
+          <div className="stat-icon" style={{ background: 'rgba(244, 63, 94, 0.15)', color: 'var(--accent-rose)' }}>
+            <HardHat size={28} />
+          </div>
+          <div>
+            <div className="stat-lbl">Labor & Construction Expenses</div>
+            <div className="stat-val">{(metrics.totalExpenses || 0).toLocaleString()} <span style={{ fontSize: '1rem', fontWeight: 600 }}>RWF</span></div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--accent-rose)', marginTop: '0.25rem', fontWeight: 600 }}>
+              {metrics.workerCount || 0} Workers · Wages & Capital
             </div>
           </div>
         </div>

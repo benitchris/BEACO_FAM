@@ -8,6 +8,7 @@ import SalesPage from './components/SalesPage';
 import FeedPage from './components/FeedPage';
 import MortalityPage from './components/MortalityPage';
 import VaccinationPage from './components/VaccinationPage';
+import ExpensesPage from './components/ExpensesPage';
 import PythonWasmConsole from './components/PythonWasmConsole';
 import DatabaseConsole from './components/DatabaseConsole';
 
@@ -107,6 +108,9 @@ export default function App() {
               )}
               {activeTab === 'vaccination' && (
                 <VaccinationPage onRefreshData={refreshFarmData} />
+              )}
+              {activeTab === 'expenses' && (
+                <ExpensesPage onRefreshData={refreshFarmData} />
               )}
               {activeTab === 'python' && (
                 <PythonWasmConsole metrics={metrics} />

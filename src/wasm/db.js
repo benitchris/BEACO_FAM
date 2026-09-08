@@ -1,9 +1,11 @@
 import initSqlJs from 'sql.js';
 
 let db = null;
-const STORAGE_KEY = 'BEACO_FARM_WASM_SQLITE_DB';
+const STORAGE_KEY = 'BEACO_FARM_WASM_SQLITE_DB_v2';
 
-// Default schema and seed dataset extracted directly from beaco_farm.sql
+// Determine base path for WASM file (works both locally and on GitHub Pages)
+const BASE_URL = import.meta.env.BASE_URL || '/';
+
 const DEFAULT_SQL_SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,26 +22,39 @@ CREATE TABLE IF NOT EXISTS chicken_categories (
     description TEXT
 );
 
+-- Chicken sheds / buildings
+CREATE TABLE IF NOT EXISTS buildings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    building_name TEXT NOT NULL,
+    capacity INTEGER DEFAULT 0,
+    description TEXT
+);
+
 CREATE TABLE IF NOT EXISTS chickens (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     chicken_code TEXT,
     category_id INTEGER,
+    building_id INTEGER,
     breed TEXT,
     quantity INTEGER NOT NULL,
     age_in_weeks INTEGER,
     date_added DATE,
     status TEXT DEFAULT 'Active',
-    FOREIGN KEY (category_id) REFERENCES chicken_categories(id)
+    FOREIGN KEY (category_id) REFERENCES chicken_categories(id),
+    FOREIGN KEY (building_id) REFERENCES buildings(id)
 );
 
+-- Egg production now tracks per building
 CREATE TABLE IF NOT EXISTS egg_production (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     production_date DATE NOT NULL,
     category_id INTEGER,
+    building_id INTEGER,
     eggs_collected INTEGER DEFAULT 0,
     broken_eggs INTEGER DEFAULT 0,
     remaining_eggs INTEGER DEFAULT 0,
-    FOREIGN KEY (category_id) REFERENCES chicken_categories(id)
+    FOREIGN KEY (category_id) REFERENCES chicken_categories(id),
+    FOREIGN KEY (building_id) REFERENCES buildings(id)
 );
 
 CREATE TABLE IF NOT EXISTS customers (
@@ -80,9 +95,43 @@ CREATE TABLE IF NOT EXISTS mortality (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     death_date DATE,
     category_id INTEGER,
+    building_id INTEGER,
     quantity INTEGER,
     cause_of_death TEXT,
     FOREIGN KEY (category_id) REFERENCES chicken_categories(id)
+);
+
+-- Workers / Employees
+CREATE TABLE IF NOT EXISTS workers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    full_name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    daily_rate DECIMAL(10,2) DEFAULT 0,
+    phone TEXT,
+    start_date DATE,
+    status TEXT DEFAULT 'Active'
+);
+
+-- Worker wage payments
+CREATE TABLE IF NOT EXISTS worker_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    worker_id INTEGER NOT NULL,
+    payment_date DATE NOT NULL,
+    days_worked INTEGER DEFAULT 1,
+    amount_paid DECIMAL(10,2) NOT NULL,
+    notes TEXT,
+    FOREIGN KEY (worker_id) REFERENCES workers(id)
+);
+
+-- Construction & equipment expenses
+CREATE TABLE IF NOT EXISTS construction_expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    expense_date DATE NOT NULL,
+    description TEXT NOT NULL,
+    category TEXT DEFAULT 'Construction',
+    amount DECIMAL(10,2) NOT NULL,
+    vendor TEXT,
+    notes TEXT
 );
 
 CREATE TABLE IF NOT EXISTS inventory (
@@ -100,21 +149,30 @@ INSERT INTO chicken_categories (id, category_name, description) VALUES
 (3, 'Chicks', 'Young chickens'),
 (4, 'Breeders', 'Parent chickens');
 
+-- Three chicken sheds/buildings
+INSERT INTO buildings (id, building_name, capacity, description) VALUES
+(1, 'Building A', 600, 'Main layer house - East Wing'),
+(2, 'Building B', 400, 'Broiler house - Central Unit'),
+(3, 'Building C', 300, 'Chick nursery - West Wing');
+
 INSERT INTO users (full_name, username, password, role) VALUES
 ('Administrator', 'admin', 'admin123', 'Administrator');
 
--- Initial farm data
-INSERT INTO chickens (chicken_code, category_id, breed, quantity, age_in_weeks, date_added, status) VALUES
-('CHK-101', 1, 'Lohmann Brown', 450, 24, '2026-01-15', 'Active'),
-('CHK-102', 2, 'Cobb 500', 300, 8, '2026-02-01', 'Active'),
-('CHK-103', 3, 'Day-old Chicks', 200, 2, '2026-02-20', 'Active');
+INSERT INTO chickens (chicken_code, category_id, building_id, breed, quantity, age_in_weeks, date_added, status) VALUES
+('CHK-101', 1, 1, 'Lohmann Brown', 450, 24, '2026-01-15', 'Active'),
+('CHK-102', 2, 2, 'Cobb 500', 300, 8, '2026-02-01', 'Active'),
+('CHK-103', 3, 3, 'Day-old Chicks', 200, 2, '2026-02-20', 'Active');
 
-INSERT INTO egg_production (production_date, category_id, eggs_collected, broken_eggs, remaining_eggs) VALUES
-('2026-03-01', 1, 380, 10, 370),
-('2026-03-02', 1, 395, 8, 387),
-('2026-03-03', 1, 410, 5, 405),
-('2026-03-04', 1, 400, 12, 388),
-('2026-03-05', 1, 420, 6, 414);
+INSERT INTO egg_production (production_date, category_id, building_id, eggs_collected, broken_eggs, remaining_eggs) VALUES
+('2026-03-01', 1, 1, 380, 10, 370),
+('2026-03-01', 1, 2, 210, 5, 205),
+('2026-03-01', 1, 3, 90, 3, 87),
+('2026-03-02', 1, 1, 395, 8, 387),
+('2026-03-02', 1, 2, 215, 4, 211),
+('2026-03-02', 1, 3, 95, 2, 93),
+('2026-03-03', 1, 1, 410, 5, 405),
+('2026-03-03', 1, 2, 220, 6, 214),
+('2026-03-03', 1, 3, 100, 1, 99);
 
 INSERT INTO customers (customer_name, phone, address) VALUES
 ('Kigali Fresh Market', '+250 788 123 456', 'Kigali City Center'),
@@ -134,9 +192,30 @@ INSERT INTO vaccinations (vaccine_name, vaccination_date, notes) VALUES
 ('Newcastle Disease Vaccine', '2026-02-05', 'Administered via drinking water to all layers'),
 ('Gumboro (IBD)', '2026-02-18', 'Booster dose for chicks cohort');
 
-INSERT INTO mortality (death_date, category_id, quantity, cause_of_death) VALUES
-('2026-02-25', 1, 3, 'Heat stress'),
-('2026-03-02', 3, 2, 'Natural causes');
+INSERT INTO mortality (death_date, category_id, building_id, quantity, cause_of_death) VALUES
+('2026-02-25', 1, 1, 3, 'Heat stress'),
+('2026-03-02', 3, 3, 2, 'Natural causes');
+
+-- Workers
+INSERT INTO workers (full_name, role, daily_rate, phone, start_date, status) VALUES
+('Jean Baptiste Mugabo', 'Farm Supervisor', 8000.00, '+250 788 111 222', '2025-01-10', 'Active'),
+('Marie Claire Uwimana', 'Layer House Attendant', 5000.00, '+250 782 333 444', '2025-03-15', 'Active'),
+('Eric Habimana', 'Feed & Watering Operator', 5000.00, '+250 783 555 666', '2025-06-01', 'Active'),
+('Alice Mukamana', 'Egg Collector', 4500.00, '+250 789 777 888', '2026-01-05', 'Active');
+
+-- Worker payments
+INSERT INTO worker_payments (worker_id, payment_date, days_worked, amount_paid, notes) VALUES
+(1, '2026-02-28', 28, 224000.00, 'February wages - Supervisor'),
+(2, '2026-02-28', 28, 140000.00, 'February wages - Layer House'),
+(3, '2026-02-28', 28, 140000.00, 'February wages - Feed Operator'),
+(4, '2026-02-28', 26, 117000.00, 'February wages - Egg Collector (2 days off)');
+
+-- Construction expenses
+INSERT INTO construction_expenses (expense_date, description, category, amount, vendor, notes) VALUES
+('2026-01-15', 'Roof repair - Building A', 'Repair', 450000.00, 'Kigali Construction Ltd', 'Iron sheets replacement'),
+('2026-01-20', 'New feed storage silo', 'Construction', 850000.00, 'AgriBuilders Rwanda', 'Steel silo 5 tonne capacity'),
+('2026-02-05', 'Water pipeline extension', 'Infrastructure', 320000.00, 'Plumbing Solutions Ltd', 'Extension to Building C'),
+('2026-02-18', 'Solar panels installation', 'Equipment', 1200000.00, 'SolarTech Rwanda', '4kW off-grid system for farm');
 `;
 
 export async function initWasmDatabase() {
@@ -144,7 +223,7 @@ export async function initWasmDatabase() {
 
   try {
     const SQL = await initSqlJs({
-      locateFile: file => `https://sql.js.org/dist/${file}`
+      locateFile: () => `${BASE_URL}sql-wasm.wasm`
     });
 
     const savedDbBase64 = localStorage.getItem(STORAGE_KEY);
@@ -157,17 +236,11 @@ export async function initWasmDatabase() {
       db.run(DEFAULT_SQL_SCHEMA);
       db.run(INITIAL_SEED_DATA);
       saveDatabaseState();
-      console.log('BEACO FARM: SQLite WASM Database initialized with default schema.');
+      console.log('BEACO FARM: SQLite WASM Database initialized with default schema and seed data.');
     }
   } catch (err) {
-    console.error('Failed to load SQLite WASM engine:', err);
-    // Fallback in-memory
-    const SQL = await initSqlJs({
-      locateFile: file => `https://sql.js.org/dist/${file}`
-    });
-    db = new SQL.Database();
-    db.run(DEFAULT_SQL_SCHEMA);
-    db.run(INITIAL_SEED_DATA);
+    console.error('BEACO FARM: Failed to initialize SQLite WASM:', err);
+    throw err;
   }
 
   return db;
@@ -180,7 +253,7 @@ export function saveDatabaseState() {
     const base64 = btoa(String.fromCharCode.apply(null, data));
     localStorage.setItem(STORAGE_KEY, base64);
   } catch (e) {
-    console.error('Error persisting database state to LocalStorage:', e);
+    console.error('Error persisting database:', e);
   }
 }
 
@@ -203,7 +276,7 @@ export function runQuery(sql, params = []) {
     saveDatabaseState();
     return results;
   } catch (err) {
-    console.error('SQL Execution Error:', err, sql);
+    console.error('SQL Error:', err, sql);
     throw err;
   }
 }
@@ -214,7 +287,6 @@ export function executeSql(sql) {
   saveDatabaseState();
 }
 
-// Data helper functions
 export function getFarmMetrics() {
   const chickens = runQuery("SELECT COALESCE(SUM(quantity), 0) as total FROM chickens")[0]?.total || 0;
   const eggs = runQuery("SELECT COALESCE(SUM(eggs_collected), 0) as total FROM egg_production")[0]?.total || 0;
@@ -222,10 +294,14 @@ export function getFarmMetrics() {
   const revenue = runQuery("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales")[0]?.total || 0;
   const deaths = runQuery("SELECT COALESCE(SUM(quantity), 0) as total FROM mortality")[0]?.total || 0;
   const feed = runQuery("SELECT COALESCE(SUM(quantity), 0) as total_purchased, COALESCE(SUM(consumed_kg), 0) as total_consumed, COALESCE(SUM(remaining_kg), 0) as total_remaining FROM feed_management")[0] || { total_purchased: 0, total_consumed: 0, total_remaining: 0 };
+  const totalWages = runQuery("SELECT COALESCE(SUM(amount_paid), 0) as total FROM worker_payments")[0]?.total || 0;
+  const totalConstruction = runQuery("SELECT COALESCE(SUM(amount), 0) as total FROM construction_expenses")[0]?.total || 0;
+  const workerCount = runQuery("SELECT COUNT(*) as total FROM workers WHERE status = 'Active'")[0]?.total || 0;
 
   const mortalityRate = chickens > 0 ? ((deaths / chickens) * 100).toFixed(2) : 0;
   const survivalRate = chickens > 0 ? (((chickens - deaths) / chickens) * 100).toFixed(2) : 100;
   const eggsPerChicken = chickens > 0 ? (eggs / chickens).toFixed(2) : 0;
+  const totalExpenses = Number(totalWages) + Number(totalConstruction);
 
   let overallStatus = "GOOD PERFORMANCE";
   if (mortalityRate > 5 || feed.total_remaining <= 0) {
@@ -246,6 +322,10 @@ export function getFarmMetrics() {
     mortalityRate,
     survivalRate,
     eggsPerChicken,
-    overallStatus
+    overallStatus,
+    totalWages,
+    totalConstruction,
+    totalExpenses,
+    workerCount
   };
 }
