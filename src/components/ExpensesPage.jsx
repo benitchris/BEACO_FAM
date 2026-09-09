@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Users, HardHat, DollarSign, Plus, Trash2, Calendar, Wrench, Briefcase, FileText } from 'lucide-react';
 import { runQuery, executeSql } from '../wasm/db';
 
-export default function ExpensesPage({ onRefreshData }) {
-  const [activeTab, setActiveTab] = useState('summary'); // 'summary' | 'workers' | 'payroll' | 'construction'
+export default function ExpensesPage({ onRefreshData, currentUser }) {
+  const isConstruction = currentUser?.role === 'Construction';
+  const isAdmin = currentUser?.role === 'Admin' || !currentUser;
+
+  const [activeTab, setActiveTab] = useState(isConstruction ? 'construction' : 'summary'); // 'summary' | 'workers' | 'payroll' | 'construction'
   
   // Summary Stats
   const [workers, setWorkers] = useState([]);
@@ -37,23 +40,25 @@ export default function ExpensesPage({ onRefreshData }) {
 
   const loadData = () => {
     try {
-      const wList = runQuery("SELECT * FROM workers ORDER BY id DESC");
-      setWorkers(wList);
+      if (isAdmin) {
+        const wList = runQuery("SELECT * FROM workers ORDER BY id DESC");
+        setWorkers(wList);
 
-      const pList = runQuery(`
-        SELECT p.*, w.full_name, w.role 
-        FROM worker_payments p 
-        LEFT JOIN workers w ON p.worker_id = w.id 
-        ORDER BY p.payment_date DESC
-      `);
-      setPayments(pList);
+        const pList = runQuery(`
+          SELECT p.*, w.full_name, w.role 
+          FROM worker_payments p 
+          LEFT JOIN workers w ON p.worker_id = w.id 
+          ORDER BY p.payment_date DESC
+        `);
+        setPayments(pList);
+
+        if (wList.length > 0 && !payWorkerId) {
+          setPayWorkerId(wList[0].id);
+        }
+      }
 
       const cList = runQuery("SELECT * FROM construction_expenses ORDER BY expense_date DESC");
       setConstruction(cList);
-
-      if (wList.length > 0 && !payWorkerId) {
-        setPayWorkerId(wList[0].id);
-      }
     } catch (err) {
       console.error('Error loading expense data:', err);
     }
@@ -61,7 +66,7 @@ export default function ExpensesPage({ onRefreshData }) {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [currentUser]);
 
   // Handlers
   const handleAddWorker = (e) => {
@@ -150,19 +155,26 @@ export default function ExpensesPage({ onRefreshData }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <HardHat color="var(--accent-amber)" /> Workers & Farm Construction Expenses
+            <HardHat color="var(--accent-amber)" /> {isConstruction ? 'Farm Construction & Building Expenses' : 'Workers & Construction Expenses'}
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-            Manage farm labor wages, employee profiles, and structural construction/repair costs.
+            {isConstruction 
+              ? 'Log and track structural repairs, new shed construction, solar equipment, and site infrastructure.' 
+              : 'Manage farm labor wages, employee profiles, and structural construction/repair costs.'}
           </p>
         </div>
+
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <button onClick={() => setShowWorkerModal(true)} className="btn btn-secondary btn-sm">
-            <Plus size={16} /> Add Worker
-          </button>
-          <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary btn-sm">
-            <DollarSign size={16} /> Pay Wages
-          </button>
+          {isAdmin && (
+            <>
+              <button onClick={() => setShowWorkerModal(true)} className="btn btn-secondary btn-sm">
+                <Plus size={16} /> Add Worker
+              </button>
+              <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary btn-sm">
+                <DollarSign size={16} /> Pay Wages
+              </button>
+            </>
+          )}
           <button onClick={() => setShowConstructionModal(true)} className="btn btn-amber btn-sm" style={{ background: 'var(--accent-amber)', color: '#000', fontWeight: 700 }}>
             <Wrench size={16} /> Record Construction Cost
           </button>
@@ -171,67 +183,125 @@ export default function ExpensesPage({ onRefreshData }) {
 
       {/* Overview Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
-        <div className="card card-hover" style={{ borderLeft: '4px solid var(--accent-emerald)' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Active Workers</div>
-          <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--accent-emerald)', margin: '0.25rem 0' }}>{activeWorkers}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Registered farm personnel</div>
-        </div>
+        {isAdmin && (
+          <>
+            <div className="card card-hover" style={{ borderLeft: '4px solid var(--accent-emerald)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Active Workers</div>
+              <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--accent-emerald)', margin: '0.25rem 0' }}>{activeWorkers}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Registered farm personnel</div>
+            </div>
 
-        <div className="card card-hover" style={{ borderLeft: '4px solid var(--accent-sky)' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Total Payroll Paid</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--accent-sky)', margin: '0.25rem 0' }}>
-            RWF {totalPayroll.toLocaleString()}
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Cumulative wage payments</div>
-        </div>
+            <div className="card card-hover" style={{ borderLeft: '4px solid var(--accent-sky)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Total Payroll Paid</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--accent-sky)', margin: '0.25rem 0' }}>
+                RWF {totalPayroll.toLocaleString()}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Cumulative wage payments</div>
+            </div>
+          </>
+        )}
 
         <div className="card card-hover" style={{ borderLeft: '4px solid var(--accent-amber)' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Construction & Repairs</div>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Construction & Building Costs</div>
           <div style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--accent-amber)', margin: '0.25rem 0' }}>
             RWF {totalConstruction.toLocaleString()}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Silos, roofs, plumbing, solar</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Silos, roofs, plumbing, solar ({construction.length} records)</div>
         </div>
 
-        <div className="card card-hover" style={{ borderLeft: '4px solid var(--accent-rose)', background: 'rgba(244,63,94,0.05)' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Grand Total Labor & Capital</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--accent-rose)', margin: '0.25rem 0' }}>
-            RWF {grandTotal.toLocaleString()}
+        {isAdmin && (
+          <div className="card card-hover" style={{ borderLeft: '4px solid var(--accent-rose)', background: 'rgba(244,63,94,0.05)' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Grand Total Labor & Capital</div>
+            <div style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--accent-rose)', margin: '0.25rem 0' }}>
+              RWF {grandTotal.toLocaleString()}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Combined non-feed operational expense</div>
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Combined non-feed operational expense</div>
-        </div>
+        )}
       </div>
 
       {/* Navigation Tabs */}
-      <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-        {[
-          { id: 'summary', label: 'All Expenses Log', icon: FileText },
-          { id: 'workers', label: `Workers Directory (${workers.length})`, icon: Users },
-          { id: 'payroll', label: `Payroll History (${payments.length})`, icon: DollarSign },
-          { id: 'construction', label: `Construction Costs (${construction.length})`, icon: HardHat },
-        ].map(tab => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '0.5rem',
-                padding: '0.625rem 1.25rem', borderRadius: '8px',
-                border: 'none', background: isActive ? 'var(--accent-emerald)' : 'transparent',
-                color: isActive ? '#fff' : 'var(--text-muted)',
-                fontWeight: isActive ? 700 : 500, cursor: 'pointer', transition: 'all 0.2s ease'
-              }}
-            >
-              <Icon size={16} /> {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      {isAdmin && (
+        <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+          {[
+            { id: 'summary', label: 'All Expenses Log', icon: FileText },
+            { id: 'workers', label: `Workers Directory (${workers.length})`, icon: Users },
+            { id: 'payroll', label: `Payroll History (${payments.length})`, icon: DollarSign },
+            { id: 'construction', label: `Construction Costs (${construction.length})`, icon: HardHat },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.5rem',
+                  padding: '0.625rem 1.25rem', borderRadius: '8px',
+                  border: 'none', background: isActive ? 'var(--accent-emerald)' : 'transparent',
+                  color: isActive ? '#fff' : 'var(--text-muted)',
+                  fontWeight: isActive ? 700 : 500, cursor: 'pointer', transition: 'all 0.2s ease'
+                }}
+              >
+                <Icon size={16} /> {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-      {/* Tab 1: Summary / Unified Log */}
-      {activeTab === 'summary' && (
+      {/* Tab Content for Construction Role or Admin Construction Tab */}
+      {(isConstruction || activeTab === 'construction') && (
+        <div className="table-container">
+          <div style={{ padding: '1rem', background: 'var(--bg-surface-elevated)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 800, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <HardHat size={18} color="var(--accent-amber)" /> Construction & Site Expenses ({construction.length})
+            </span>
+            <button onClick={() => setShowConstructionModal(true)} className="btn btn-amber btn-sm">
+              <Plus size={14} /> Record Expense
+            </button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Vendor / Supplier</th>
+                <th>Amount (RWF)</th>
+                <th>Notes</th>
+                {isAdmin && <th>Action</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {construction.length === 0 ? (
+                <tr><td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-subtle)' }}>No construction or equipment expenses recorded.</td></tr>
+              ) : (
+                construction.map(item => (
+                  <tr key={item.id}>
+                    <td style={{ fontWeight: 600 }}>{item.expense_date}</td>
+                    <td style={{ fontWeight: 700 }}>{item.description}</td>
+                    <td><span className="badge badge-amber">{item.category}</span></td>
+                    <td>{item.vendor || 'Direct'}</td>
+                    <td style={{ fontWeight: 700, color: 'var(--accent-amber)' }}>RWF {Number(item.amount).toLocaleString()}</td>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{item.notes || '-'}</td>
+                    {isAdmin && (
+                      <td>
+                        <button onClick={() => handleDeleteConstruction(item.id)} className="btn btn-danger btn-sm">
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Admin Tabs */}
+      {isAdmin && activeTab === 'summary' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div className="card">
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -305,8 +375,7 @@ export default function ExpensesPage({ onRefreshData }) {
         </div>
       )}
 
-      {/* Tab 2: Workers Directory */}
-      {activeTab === 'workers' && (
+      {isAdmin && activeTab === 'workers' && (
         <div className="table-container">
           <table>
             <thead>
@@ -347,8 +416,7 @@ export default function ExpensesPage({ onRefreshData }) {
         </div>
       )}
 
-      {/* Tab 3: Payroll History */}
-      {activeTab === 'payroll' && (
+      {isAdmin && activeTab === 'payroll' && (
         <div className="table-container">
           <table>
             <thead>
@@ -387,48 +455,8 @@ export default function ExpensesPage({ onRefreshData }) {
         </div>
       )}
 
-      {/* Tab 4: Construction Expenses */}
-      {activeTab === 'construction' && (
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Category</th>
-                <th>Vendor / Supplier</th>
-                <th>Amount (RWF)</th>
-                <th>Notes</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {construction.length === 0 ? (
-                <tr><td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-subtle)' }}>No construction or equipment expenses recorded.</td></tr>
-              ) : (
-                construction.map(item => (
-                  <tr key={item.id}>
-                    <td style={{ fontWeight: 600 }}>{item.expense_date}</td>
-                    <td style={{ fontWeight: 700 }}>{item.description}</td>
-                    <td><span className="badge badge-amber">{item.category}</span></td>
-                    <td>{item.vendor || 'Direct'}</td>
-                    <td style={{ fontWeight: 700, color: 'var(--accent-amber)' }}>RWF {Number(item.amount).toLocaleString()}</td>
-                    <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{item.notes || '-'}</td>
-                    <td>
-                      <button onClick={() => handleDeleteConstruction(item.id)} className="btn btn-danger btn-sm">
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Modal: Add Worker */}
-      {showWorkerModal && (
+      {/* Modals */}
+      {showWorkerModal && isAdmin && (
         <div className="modal-overlay">
           <div className="modal-content">
             <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -467,8 +495,7 @@ export default function ExpensesPage({ onRefreshData }) {
         </div>
       )}
 
-      {/* Modal: Pay Wages */}
-      {showPaymentModal && (
+      {showPaymentModal && isAdmin && (
         <div className="modal-overlay">
           <div className="modal-content">
             <h2 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -516,7 +543,6 @@ export default function ExpensesPage({ onRefreshData }) {
         </div>
       )}
 
-      {/* Modal: Add Construction Expense */}
       {showConstructionModal && (
         <div className="modal-overlay">
           <div className="modal-content">

@@ -11,7 +11,8 @@ import {
   CheckCircle2,
   Calendar,
   ArrowUpDown,
-  Filter
+  Filter,
+  Eye
 } from 'lucide-react';
 import { runQuery, getFarmMetrics } from '../wasm/db';
 import { exportToPdf, exportToExcel } from '../utils/reportExporter';
@@ -27,6 +28,8 @@ export default function ReportsPage({ currentUser }) {
   const todayStr = new Date().toISOString().split('T')[0];
   const [startDate, setStartDate] = useState('2026-01-01');
   const [endDate, setEndDate] = useState(todayStr);
+
+  const [activePreviewReport, setActivePreviewReport] = useState('eggs'); // 'eggs' | 'sales' | 'expenses'
 
   // Helper to compute date condition for SQL
   const getDateCondition = (dateColumn) => {
@@ -58,24 +61,70 @@ export default function ReportsPage({ currentUser }) {
     return 'All Available Records';
   };
 
+  // Helper to load sorted data for previews and exports
+  const loadEggRecords = () => {
+    const whereClause = getDateCondition('e.production_date');
+    const orderDirection = sortOrder.toUpperCase();
+    return runQuery(`
+      SELECT e.production_date, b.building_name, cat.category_name, e.eggs_collected, e.broken_eggs, e.remaining_eggs
+      FROM egg_production e
+      LEFT JOIN buildings b ON e.building_id = b.id
+      LEFT JOIN chicken_categories cat ON e.category_id = cat.id
+      WHERE ${whereClause}
+      ORDER BY e.production_date ${orderDirection}, e.building_id
+    `);
+  };
+
+  const loadSalesRecords = () => {
+    const whereClause = getDateCondition('s.sale_date');
+    const orderDirection = sortOrder.toUpperCase();
+    return runQuery(`
+      SELECT s.sale_date, c.customer_name, c.phone, s.quantity, s.unit_price, s.total_amount
+      FROM sales s
+      LEFT JOIN customers c ON s.customer_id = c.id
+      WHERE ${whereClause}
+      ORDER BY s.sale_date ${orderDirection}
+    `);
+  };
+
+  const loadExpenseRecords = () => {
+    const pWhere = getDateCondition('p.payment_date');
+    const cWhere = getDateCondition('expense_date');
+
+    const payroll = currentUser?.role === 'Construction' ? [] : runQuery(`
+      SELECT p.payment_date as event_date, w.full_name as title, 'Worker Wage Payroll' as category, 
+             p.days_worked || ' days worked (' || COALESCE(p.notes, '-') || ')' as details, p.amount_paid as amount
+      FROM worker_payments p
+      LEFT JOIN workers w ON p.worker_id = w.id
+      WHERE ${pWhere}
+    `);
+
+    const construction = runQuery(`
+      SELECT expense_date as event_date, description as title, 'Construction (' || category || ')' as category,
+             'Vendor: ' || COALESCE(vendor, 'Direct') || ' (' || COALESCE(notes, '-') || ')' as details, amount
+      FROM construction_expenses
+      WHERE ${cWhere}
+    `);
+
+    let combined = [...payroll, ...construction];
+    combined.sort((a, b) => {
+      if (sortOrder === 'desc') {
+        return new Date(b.event_date) - new Date(a.event_date);
+      } else {
+        return new Date(a.event_date) - new Date(b.event_date);
+      }
+    });
+
+    return combined;
+  };
+
   // 1. Egg Production Report Generator
   const handleExportEggs = async (format) => {
     setDownloading(true);
     setStatusMsg('Generating Egg Production Report...');
 
     try {
-      const whereClause = getDateCondition('e.production_date');
-      const orderDirection = sortOrder.toUpperCase();
-
-      const records = runQuery(`
-        SELECT e.production_date, b.building_name, cat.category_name, e.eggs_collected, e.broken_eggs, e.remaining_eggs
-        FROM egg_production e
-        LEFT JOIN buildings b ON e.building_id = b.id
-        LEFT JOIN chicken_categories cat ON e.category_id = cat.id
-        WHERE ${whereClause}
-        ORDER BY e.production_date ${orderDirection}, e.building_id
-      `);
-
+      const records = loadEggRecords();
       const headers = ['Date', 'Building / Shed', 'Category', 'Collected', 'Broken', 'Net Available'];
       const rows = records.map(r => [
         r.production_date,
@@ -90,7 +139,7 @@ export default function ReportsPage({ currentUser }) {
       const totalBroken = records.reduce((a, b) => a + Number(b.broken_eggs), 0);
       const totalNet = records.reduce((a, b) => a + Number(b.remaining_eggs), 0);
 
-      const subtitle = `Time Filter: ${getTimeLabel()} | Sorted: ${sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'} (${records.length} records)`;
+      const subtitle = `Time Scope: ${getTimeLabel()} | Date Sorted: ${sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'} (${records.length} records)`;
 
       if (format === 'pdf') {
         await exportToPdf({
@@ -103,15 +152,15 @@ export default function ReportsPage({ currentUser }) {
             { label: 'Total Broken', value: totalBroken.toLocaleString(), color: 'rose' },
             { label: 'Net Available', value: totalNet.toLocaleString(), color: 'emerald' }
           ],
-          filename: `beacon_fam_egg_production_${timePreset}`,
+          filename: `beacon_fam_egg_production_${timePreset}_${sortOrder}`,
           generatedBy: currentUser?.full_name || currentUser?.username
         });
       } else {
         exportToExcel({
-          title: `Egg Harvest & Building Production Report — ${getTimeLabel()}`,
+          title: `Egg Harvest & Building Production Report — ${getTimeLabel()} (${sortOrder === 'desc' ? 'Newest First' : 'Oldest First'})`,
           headers,
           rows,
-          filename: `beacon_fam_egg_production_${timePreset}`
+          filename: `beacon_fam_egg_production_${timePreset}_${sortOrder}`
         });
       }
       setStatusMsg(`Egg Production Report downloaded (${records.length} records)!`);
@@ -129,17 +178,7 @@ export default function ReportsPage({ currentUser }) {
     setStatusMsg('Generating Sales & Revenue Report...');
 
     try {
-      const whereClause = getDateCondition('s.sale_date');
-      const orderDirection = sortOrder.toUpperCase();
-
-      const records = runQuery(`
-        SELECT s.sale_date, c.customer_name, c.phone, s.quantity, s.unit_price, s.total_amount
-        FROM sales s
-        LEFT JOIN customers c ON s.customer_id = c.id
-        WHERE ${whereClause}
-        ORDER BY s.sale_date ${orderDirection}
-      `);
-
+      const records = loadSalesRecords();
       const headers = ['Sale Date', 'Customer Name', 'Phone', 'Quantity (Eggs)', 'Unit Price (RWF)', 'Total Revenue (RWF)'];
       const rows = records.map(r => [
         r.sale_date,
@@ -152,7 +191,7 @@ export default function ReportsPage({ currentUser }) {
 
       const totalRevenue = records.reduce((a, b) => a + Number(b.total_amount), 0);
       const totalEggsSold = records.reduce((a, b) => a + Number(b.quantity), 0);
-      const subtitle = `Time Filter: ${getTimeLabel()} | Sorted: ${sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'} (${records.length} sales)`;
+      const subtitle = `Time Scope: ${getTimeLabel()} | Date Sorted: ${sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'} (${records.length} sales)`;
 
       if (format === 'pdf') {
         await exportToPdf({
@@ -165,15 +204,15 @@ export default function ReportsPage({ currentUser }) {
             { label: 'Total Eggs Sold', value: totalEggsSold.toLocaleString(), color: 'emerald' },
             { label: 'Total Transactions', value: records.length.toString(), color: 'emerald' }
           ],
-          filename: `beacon_fam_sales_revenue_${timePreset}`,
+          filename: `beacon_fam_sales_revenue_${timePreset}_${sortOrder}`,
           generatedBy: currentUser?.full_name || currentUser?.username
         });
       } else {
         exportToExcel({
-          title: `Sales & Revenue Financial Report — ${getTimeLabel()}`,
+          title: `Sales & Revenue Financial Report — ${getTimeLabel()} (${sortOrder === 'desc' ? 'Newest First' : 'Oldest First'})`,
           headers,
           rows,
-          filename: `beacon_fam_sales_revenue_${timePreset}`
+          filename: `beacon_fam_sales_revenue_${timePreset}_${sortOrder}`
         });
       }
       setStatusMsg(`Sales Report downloaded (${records.length} sales)!`);
@@ -191,35 +230,7 @@ export default function ReportsPage({ currentUser }) {
     setStatusMsg('Generating Labor & Construction Expense Report...');
 
     try {
-      const pWhere = getDateCondition('p.payment_date');
-      const cWhere = getDateCondition('expense_date');
-      const orderDirection = sortOrder.toUpperCase();
-
-      const payroll = runQuery(`
-        SELECT p.payment_date as event_date, w.full_name as title, 'Worker Wage Payroll' as category, 
-               p.days_worked || ' days worked (' || COALESCE(p.notes, '-') || ')' as details, p.amount_paid as amount
-        FROM worker_payments p
-        LEFT JOIN workers w ON p.worker_id = w.id
-        WHERE ${pWhere}
-      `);
-
-      const construction = runQuery(`
-        SELECT expense_date as event_date, description as title, 'Construction (' || category || ')' as category,
-               'Vendor: ' || COALESCE(vendor, 'Direct') || ' (' || COALESCE(notes, '-') || ')' as details, amount
-        FROM construction_expenses
-        WHERE ${cWhere}
-      `);
-
-      // Combine and sort by date
-      let combined = [...payroll, ...construction];
-      combined.sort((a, b) => {
-        if (sortOrder === 'desc') {
-          return new Date(b.event_date) - new Date(a.event_date);
-        } else {
-          return new Date(a.event_date) - new Date(b.event_date);
-        }
-      });
-
+      const combined = loadExpenseRecords();
       const headers = ['Date', 'Expense Category', 'Title / Worker / Vendor', 'Details', 'Amount Paid (RWF)'];
       const rows = combined.map(item => [
         item.event_date,
@@ -230,11 +241,11 @@ export default function ReportsPage({ currentUser }) {
       ]);
 
       const grandTotal = combined.reduce((a, b) => a + Number(b.amount), 0);
-      const subtitle = `Time Filter: ${getTimeLabel()} | Sorted: ${sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'} (${combined.length} expense records)`;
+      const subtitle = `Time Scope: ${getTimeLabel()} | Date Sorted: ${sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'} (${combined.length} records)`;
 
       if (format === 'pdf') {
         await exportToPdf({
-          title: 'Workers Payroll & Construction Expenses Report',
+          title: currentUser?.role === 'Construction' ? 'Construction & Building Expenses Report' : 'Workers Payroll & Construction Expenses Report',
           subtitle,
           headers,
           rows,
@@ -243,15 +254,15 @@ export default function ReportsPage({ currentUser }) {
             { label: 'Total Expense Records', value: combined.length.toString(), color: 'emerald' },
             { label: 'Grand Total Expense', value: `RWF ${grandTotal.toLocaleString()}`, color: 'rose' }
           ],
-          filename: `beacon_fam_labor_construction_${timePreset}`,
+          filename: `beacon_fam_expenses_${timePreset}_${sortOrder}`,
           generatedBy: currentUser?.full_name || currentUser?.username
         });
       } else {
         exportToExcel({
-          title: `Workers Payroll & Construction Expenses Report — ${getTimeLabel()}`,
+          title: `Labor & Construction Expenses Report — ${getTimeLabel()} (${sortOrder === 'desc' ? 'Newest First' : 'Oldest First'})`,
           headers,
           rows,
-          filename: `beacon_fam_labor_construction_${timePreset}`
+          filename: `beacon_fam_expenses_${timePreset}_${sortOrder}`
         });
       }
       setStatusMsg(`Expenses Report downloaded (${combined.length} records)!`);
@@ -270,11 +281,11 @@ export default function ReportsPage({ currentUser }) {
 
     try {
       const metrics = getFarmMetrics();
-      const subtitle = `Time Filter Scope: ${getTimeLabel()} | Audit Sort: ${sortOrder === 'desc' ? 'Latest First' : 'Chronological'}`;
+      const subtitle = `Time Scope: ${getTimeLabel()} | Date Sorted: ${sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'}`;
 
       const headers = ['Metric Category', 'Key Performance Indicator', 'Value', 'Status / Audit Notes'];
       const rows = [
-        ['Time Range Filter', 'Selected Scope', getTimeLabel(), sortOrder === 'desc' ? 'Sorted Newest First ⬇️' : 'Sorted Oldest First ⬆️'],
+        ['Time Scope & Filter', 'Selected Range & Order', `${getTimeLabel()}`, sortOrder === 'desc' ? 'Sorted Newest First ⬇️' : 'Sorted Oldest First ⬆️'],
         ['Flock Management', 'Total Active Chickens', metrics.totalChickens.toLocaleString(), 'Active Flock'],
         ['Flock Management', 'Mortality Deaths', metrics.totalDeaths.toLocaleString(), `${metrics.mortalityRate}% Mortality Rate`],
         ['Egg Production', 'Cumulative Eggs Harvested', metrics.totalEggs.toLocaleString(), `${metrics.eggsPerChicken} eggs / chicken average`],
@@ -296,7 +307,7 @@ export default function ReportsPage({ currentUser }) {
             { label: 'Total Sales Revenue', value: `RWF ${metrics.totalRevenue.toLocaleString()}`, color: 'emerald' },
             { label: 'Total Labor/Capital', value: `RWF ${metrics.totalExpenses.toLocaleString()}`, color: 'rose' }
           ],
-          filename: `beacon_fam_master_executive_${timePreset}`,
+          filename: `beacon_fam_master_executive_${timePreset}_${sortOrder}`,
           generatedBy: currentUser?.full_name || currentUser?.username
         });
       } else {
@@ -304,7 +315,7 @@ export default function ReportsPage({ currentUser }) {
           title: `BEACON FAM — Master Executive Operations Report (${getTimeLabel()})`,
           headers,
           rows,
-          filename: `beacon_fam_master_executive_${timePreset}`
+          filename: `beacon_fam_master_executive_${timePreset}_${sortOrder}`
         });
       }
       setStatusMsg('Master Executive Report downloaded!');
@@ -315,6 +326,11 @@ export default function ReportsPage({ currentUser }) {
       setDownloading(false);
     }
   };
+
+  // Preview Data Loading
+  const previewEggData = loadEggRecords();
+  const previewSalesData = loadSalesRecords();
+  const previewExpenseData = loadExpenseRecords();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
@@ -330,7 +346,7 @@ export default function ReportsPage({ currentUser }) {
 
       {/* Global Time Filter & Sorting Control Toolbar */}
       <div className="card" style={{
-        background: 'rgba(30, 41, 59, 0.5)',
+        background: 'rgba(30, 41, 59, 0.6)',
         border: '1px solid var(--border-color)',
         display: 'flex',
         flexWrap: 'wrap',
@@ -376,12 +392,12 @@ export default function ReportsPage({ currentUser }) {
         {/* Time Sorting Control */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-sky)', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-            <ArrowUpDown size={16} /> Sort Order:
+            <ArrowUpDown size={16} /> Date Sort:
           </span>
           <button
             onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
             className="btn btn-secondary btn-sm"
-            style={{ fontSize: '0.85rem', fontWeight: 700 }}
+            style={{ fontSize: '0.85rem', fontWeight: 700, border: '1px solid var(--accent-sky)' }}
           >
             {sortOrder === 'desc' ? '⬇️ Newest First (Latest Date)' : '⬆️ Oldest First (Chronological)'}
           </button>
@@ -412,7 +428,7 @@ export default function ReportsPage({ currentUser }) {
             Combines flock count, egg harvest, commercial sales revenue, feed stock, worker wages, and construction expenses into a single audit document.
           </p>
           <div style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)', fontWeight: 700, marginBottom: '1rem' }}>
-            Filtered: {getTimeLabel()} ({sortOrder === 'desc' ? 'Newest First' : 'Oldest First'})
+            Time Scope: {getTimeLabel()} ({sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'})
           </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button onClick={() => handleExportMaster('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
@@ -439,7 +455,7 @@ export default function ReportsPage({ currentUser }) {
             Detailed breakdown of total eggs collected, broken eggs, and net yield across Building A, Building B, and Building C.
           </p>
           <div style={{ fontSize: '0.75rem', color: 'var(--accent-amber)', fontWeight: 700, marginBottom: '1rem' }}>
-            Filtered: {getTimeLabel()} ({sortOrder === 'desc' ? 'Newest First' : 'Oldest First'})
+            Time Scope: {getTimeLabel()} ({previewEggData.length} records, {sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'})
           </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button onClick={() => handleExportEggs('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
@@ -466,7 +482,7 @@ export default function ReportsPage({ currentUser }) {
             List of customer transactions, egg quantities sold, unit pricing, and total revenue in RWF.
           </p>
           <div style={{ fontSize: '0.75rem', color: 'var(--accent-sky)', fontWeight: 700, marginBottom: '1rem' }}>
-            Filtered: {getTimeLabel()} ({sortOrder === 'desc' ? 'Newest First' : 'Oldest First'})
+            Time Scope: {getTimeLabel()} ({previewSalesData.length} sales, {sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'})
           </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button onClick={() => handleExportSales('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
@@ -485,15 +501,17 @@ export default function ReportsPage({ currentUser }) {
               <HardHat size={24} color="var(--accent-rose)" />
             </div>
             <div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Labor & Construction Expenses</h3>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Worker wages & capital project costs</div>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>{currentUser?.role === 'Construction' ? 'Construction Expenses Report' : 'Labor & Construction Expenses'}</h3>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{currentUser?.role === 'Construction' ? 'Building & site infrastructure costs' : 'Worker wages & capital project costs'}</div>
             </div>
           </div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-            Audit log of employee wage disbursements, daily rates, roof repairs, feed silos, plumbing, and solar installation costs.
+            {currentUser?.role === 'Construction' 
+              ? 'Audit log of roof repairs, feed silos, plumbing, solar equipment, and site build expenses.' 
+              : 'Audit log of employee wage disbursements, daily rates, roof repairs, feed silos, plumbing, and solar installation costs.'}
           </p>
           <div style={{ fontSize: '0.75rem', color: 'var(--accent-rose)', fontWeight: 700, marginBottom: '1rem' }}>
-            Filtered: {getTimeLabel()} ({sortOrder === 'desc' ? 'Newest First' : 'Oldest First'})
+            Time Scope: {getTimeLabel()} ({previewExpenseData.length} records, {sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'})
           </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button onClick={() => handleExportExpenses('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
@@ -505,6 +523,134 @@ export default function ReportsPage({ currentUser }) {
           </div>
         </div>
 
+      </div>
+
+      {/* Live Audit Table Preview Section */}
+      <div className="card" style={{ marginTop: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Eye size={20} color="var(--accent-sky)" /> Live Audit Table Preview (Sorted {sortOrder === 'desc' ? 'Newest ⬇️' : 'Oldest ⬆️'})
+            </h3>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+              Inspect the exact sorted rows that will be printed in your PDF or Excel file.
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={() => setActivePreviewReport('eggs')}
+              className={`btn btn-sm ${activePreviewReport === 'eggs' ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              Egg Production ({previewEggData.length})
+            </button>
+            <button
+              onClick={() => setActivePreviewReport('sales')}
+              className={`btn btn-sm ${activePreviewReport === 'sales' ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              Sales ({previewSalesData.length})
+            </button>
+            <button
+              onClick={() => setActivePreviewReport('expenses')}
+              className={`btn btn-sm ${activePreviewReport === 'expenses' ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              Expenses ({previewExpenseData.length})
+            </button>
+          </div>
+        </div>
+
+        <div className="table-container">
+          {activePreviewReport === 'eggs' && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Building</th>
+                  <th>Category</th>
+                  <th>Eggs Collected</th>
+                  <th>Broken</th>
+                  <th>Net Available</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previewEggData.length === 0 ? (
+                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-subtle)' }}>No egg records in selected date range.</td></tr>
+                ) : (
+                  previewEggData.map((r, i) => (
+                    <tr key={i}>
+                      <td style={{ fontWeight: 700, color: 'var(--accent-emerald)' }}>{r.production_date}</td>
+                      <td><span className="badge badge-sky">{r.building_name || 'Building A'}</span></td>
+                      <td>{r.category_name || 'Layers'}</td>
+                      <td style={{ fontWeight: 700, color: 'var(--accent-amber)' }}>{r.eggs_collected}</td>
+                      <td style={{ color: 'var(--accent-rose)' }}>{r.broken_eggs}</td>
+                      <td style={{ fontWeight: 700, color: 'var(--accent-emerald)' }}>{r.remaining_eggs}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {activePreviewReport === 'sales' && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Sale Date</th>
+                  <th>Customer</th>
+                  <th>Phone</th>
+                  <th>Quantity Sold</th>
+                  <th>Unit Price</th>
+                  <th>Total Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previewSalesData.length === 0 ? (
+                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-subtle)' }}>No sales transactions in selected date range.</td></tr>
+                ) : (
+                  previewSalesData.map((r, i) => (
+                    <tr key={i}>
+                      <td style={{ fontWeight: 700, color: 'var(--accent-sky)' }}>{r.sale_date}</td>
+                      <td style={{ fontWeight: 600 }}>{r.customer_name || 'Direct'}</td>
+                      <td>{r.phone || '-'}</td>
+                      <td>{r.quantity} eggs</td>
+                      <td>RWF {Number(r.unit_price).toLocaleString()}</td>
+                      <td style={{ fontWeight: 700, color: 'var(--accent-emerald)' }}>RWF {Number(r.total_amount).toLocaleString()}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {activePreviewReport === 'expenses' && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Category</th>
+                  <th>Title / Worker / Vendor</th>
+                  <th>Details</th>
+                  <th>Amount (RWF)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previewExpenseData.length === 0 ? (
+                  <tr><td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-subtle)' }}>No expense records in selected date range.</td></tr>
+                ) : (
+                  previewExpenseData.map((r, i) => (
+                    <tr key={i}>
+                      <td style={{ fontWeight: 700, color: 'var(--accent-rose)' }}>{r.event_date}</td>
+                      <td><span className="badge badge-amber">{r.category}</span></td>
+                      <td style={{ fontWeight: 600 }}>{r.title}</td>
+                      <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{r.details}</td>
+                      <td style={{ fontWeight: 700, color: 'var(--accent-rose)' }}>RWF {Number(r.amount).toLocaleString()}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </div>
   );

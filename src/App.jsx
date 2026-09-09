@@ -192,7 +192,7 @@ export default function App() {
                 <SalesPage onRefreshData={refreshFarmData} />
               )}
               {activeTab === 'expenses' && (
-                <ExpensesPage onRefreshData={refreshFarmData} />
+                <ExpensesPage onRefreshData={refreshFarmData} currentUser={currentUser} />
               )}
               {activeTab === 'feed' && (
                 <FeedPage onRefreshData={refreshFarmData} />
