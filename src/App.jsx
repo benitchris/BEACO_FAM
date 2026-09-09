@@ -180,6 +180,7 @@ export default function App() {
                 <Dashboard
                   metrics={metrics}
                   onNavigate={setActiveTab}
+                  currentUser={currentUser}
                 />
               )}
               {activeTab === 'chickens' && (

@@ -11,10 +11,16 @@ import {
   CheckCircle2,
   ArrowRight,
   Sparkles,
-  HardHat
+  HardHat,
+  Building2,
+  Users,
+  FileSpreadsheet,
+  Plus
 } from 'lucide-react';
 
-export default function Dashboard({ metrics, onNavigate, onRunPython }) {
+export default function Dashboard({ metrics, onNavigate, currentUser }) {
+  const role = currentUser?.role || 'Admin';
+
   const getStatusBadge = (status) => {
     if (status.includes('EXCELLENT') || status.includes('GOOD')) {
       return <span className="badge badge-emerald"><CheckCircle2 size={14} /> {status}</span>;
@@ -25,6 +31,207 @@ export default function Dashboard({ metrics, onNavigate, onRunPython }) {
     return <span className="badge badge-amber"><Activity size={14} /> {status}</span>;
   };
 
+  // 1. CONSTRUCTION DASHBOARD VIEW
+  if (role === 'Construction') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        {/* Top Banner */}
+        <div className="card" style={{
+          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(16, 185, 129, 0.15))',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '1.5rem',
+          padding: '2rem'
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-amber)', fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+              <HardHat size={18} />
+              <span>Construction & Site Operations Hub</span>
+            </div>
+            <h1 style={{ fontSize: '1.875rem', fontWeight: 800, marginBottom: '0.5rem' }}>
+              BEACON FAM Construction Dashboard
+            </h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9375rem', maxWidth: '600px' }}>
+              Track farm infrastructure repairs, building shed capacities, feed silos, solar installations, and capital expenditure.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button onClick={() => onNavigate('expenses')} className="btn btn-primary">
+              <Plus size={18} /> Record Construction Cost
+            </button>
+            <button onClick={() => onNavigate('reports')} className="btn btn-secondary">
+              <FileSpreadsheet size={18} /> Export Reports
+            </button>
+          </div>
+        </div>
+
+        {/* Construction Stat Cards */}
+        <div className="stat-grid">
+          <div className="card stat-card card-hover" onClick={() => onNavigate('expenses')} style={{ cursor: 'pointer', borderLeft: '4px solid var(--accent-amber)' }}>
+            <div className="stat-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)' }}>
+              <HardHat size={28} />
+            </div>
+            <div>
+              <div className="stat-lbl">Construction & Repair Costs</div>
+              <div className="stat-val">RWF {(metrics.totalConstruction || 0).toLocaleString()}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--accent-amber)', marginTop: '0.25rem', fontWeight: 600 }}>
+                Capital Infrastructure Expenses
+              </div>
+            </div>
+          </div>
+
+          <div className="card stat-card card-hover" style={{ borderLeft: '4px solid var(--accent-emerald)' }}>
+            <div className="stat-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-emerald)' }}>
+              <Building2 size={28} />
+            </div>
+            <div>
+              <div className="stat-lbl">Active Sheds & Buildings</div>
+              <div className="stat-val">3 Units</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)', marginTop: '0.25rem', fontWeight: 600 }}>
+                Building A, B, C (Total Cap: 1,300)
+              </div>
+            </div>
+          </div>
+
+          <div className="card stat-card card-hover" style={{ borderLeft: '4px solid var(--accent-sky)' }}>
+            <div className="stat-icon" style={{ background: 'rgba(6, 182, 212, 0.15)', color: 'var(--accent-sky)' }}>
+              <Wrench size={28} />
+            </div>
+            <div>
+              <div className="stat-lbl">Completed Site Upgrades</div>
+              <div className="stat-val">4 Projects</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--accent-sky)', marginTop: '0.25rem', fontWeight: 600 }}>
+                Roof, Silo, Plumbing & Solar
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Building Units Infrastructure Summary */}
+        <div className="card">
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 800, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Building2 size={20} color="var(--accent-emerald)" />
+            Farm Shed Infrastructure Overview
+          </h3>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+            <div style={{ background: 'var(--bg-primary)', padding: '1.25rem', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ fontWeight: 800, color: 'var(--accent-emerald)' }}>Building A</span>
+                <span className="badge badge-emerald">Cap: 600</span>
+              </div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Main Layer House — East Wing. Iron sheet roofing repaired & reinforced.</p>
+            </div>
+
+            <div style={{ background: 'var(--bg-primary)', padding: '1.25rem', borderRadius: '10px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ fontWeight: 800, color: 'var(--accent-sky)' }}>Building B</span>
+                <span className="badge badge-sky">Cap: 400</span>
+              </div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Broiler House — Central Unit. Ventilated feeding area & automatic waterers.</p>
+            </div>
+
+            <div style={{ background: 'var(--bg-primary)', padding: '1.25rem', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ fontWeight: 800, color: 'var(--accent-amber)' }}>Building C</span>
+                <span className="badge badge-amber">Cap: 300</span>
+              </div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Chick Nursery — West Wing. Extended water pipeline & solar heating backup.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. SALES DASHBOARD VIEW
+  if (role === 'Sales') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        {/* Top Banner */}
+        <div className="card" style={{
+          background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(16, 185, 129, 0.15))',
+          border: '1px solid rgba(6, 182, 212, 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '1.5rem',
+          padding: '2rem'
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-sky)', fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+              <DollarSign size={18} />
+              <span>Commercial Sales & Customer Hub</span>
+            </div>
+            <h1 style={{ fontSize: '1.875rem', fontWeight: 800, marginBottom: '0.5rem' }}>
+              BEACON FAM Sales Operations
+            </h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9375rem', maxWidth: '600px' }}>
+              Monitor commercial egg sales, customer ledgers, unit pricing, and net egg harvest available for dispatch.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button onClick={() => onNavigate('sales')} className="btn btn-primary">
+              <Plus size={18} /> Record New Sale
+            </button>
+            <button onClick={() => onNavigate('reports')} className="btn btn-secondary">
+              <FileSpreadsheet size={18} /> Export Sales Reports
+            </button>
+          </div>
+        </div>
+
+        {/* Sales Stat Cards */}
+        <div className="stat-grid">
+          <div className="card stat-card card-hover" onClick={() => onNavigate('sales')} style={{ cursor: 'pointer', borderLeft: '4px solid var(--accent-sky)' }}>
+            <div className="stat-icon" style={{ background: 'rgba(6, 182, 212, 0.15)', color: 'var(--accent-sky)' }}>
+              <DollarSign size={28} />
+            </div>
+            <div>
+              <div className="stat-lbl">Total Sales Revenue</div>
+              <div className="stat-val">{metrics.totalRevenue.toLocaleString()} <span style={{ fontSize: '1rem', fontWeight: 600 }}>RWF</span></div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--accent-sky)', marginTop: '0.25rem', fontWeight: 600 }}>
+                {metrics.totalCustomers} Registered Buyers
+              </div>
+            </div>
+          </div>
+
+          <div className="card stat-card card-hover" onClick={() => onNavigate('eggs')} style={{ cursor: 'pointer', borderLeft: '4px solid var(--accent-amber)' }}>
+            <div className="stat-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)' }}>
+              <Egg size={28} />
+            </div>
+            <div>
+              <div className="stat-lbl">Total Eggs Harvested</div>
+              <div className="stat-val">{metrics.totalEggs.toLocaleString()}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                Harvest ready for dispatch
+              </div>
+            </div>
+          </div>
+
+          <div className="card stat-card card-hover" style={{ borderLeft: '4px solid var(--accent-emerald)' }}>
+            <div className="stat-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-emerald)' }}>
+              <Users size={28} />
+            </div>
+            <div>
+              <div className="stat-lbl">Active Customer Accounts</div>
+              <div className="stat-val">{metrics.totalCustomers}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)', marginTop: '0.25rem', fontWeight: 600 }}>
+                Wholesale & Retail Buyers
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. ADMIN FULL DASHBOARD VIEW (Everything)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       {/* Top Banner */}
@@ -41,13 +248,13 @@ export default function Dashboard({ metrics, onNavigate, onRunPython }) {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-emerald)', fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.5rem' }}>
             <Sparkles size={18} />
-            <span>WebAssembly Engine Active</span>
+            <span>Executive WebAssembly Control Center</span>
           </div>
           <h1 style={{ fontSize: '1.875rem', fontWeight: 800, marginBottom: '0.5rem' }}>
             BEACON FAM Operations Dashboard
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9375rem', maxWidth: '600px' }}>
-            Real-time poultry flock management, egg harvest logging, feed stock monitoring, and WebAssembly Python analytics.
+            Complete executive overview of flock health, egg collection, commercial revenue, worker payroll, construction expenses, and WASM analytics.
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
@@ -60,7 +267,7 @@ export default function Dashboard({ metrics, onNavigate, onRunPython }) {
 
       {/* Metric Cards Grid */}
       <div className="stat-grid">
-        <div className="card stat-card card-hover">
+        <div className="card stat-card card-hover" onClick={() => onNavigate('chickens')} style={{ cursor: 'pointer' }}>
           <div className="stat-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-emerald)' }}>
             <Bird size={28} />
           </div>
@@ -73,7 +280,7 @@ export default function Dashboard({ metrics, onNavigate, onRunPython }) {
           </div>
         </div>
 
-        <div className="card stat-card card-hover">
+        <div className="card stat-card card-hover" onClick={() => onNavigate('eggs')} style={{ cursor: 'pointer' }}>
           <div className="stat-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)' }}>
             <Egg size={28} />
           </div>
@@ -86,7 +293,7 @@ export default function Dashboard({ metrics, onNavigate, onRunPython }) {
           </div>
         </div>
 
-        <div className="card stat-card card-hover">
+        <div className="card stat-card card-hover" onClick={() => onNavigate('sales')} style={{ cursor: 'pointer' }}>
           <div className="stat-icon" style={{ background: 'rgba(6, 182, 212, 0.15)', color: 'var(--accent-sky)' }}>
             <DollarSign size={28} />
           </div>
@@ -99,7 +306,7 @@ export default function Dashboard({ metrics, onNavigate, onRunPython }) {
           </div>
         </div>
 
-        <div className="card stat-card card-hover">
+        <div className="card stat-card card-hover" onClick={() => onNavigate('feed')} style={{ cursor: 'pointer' }}>
           <div className="stat-icon" style={{ background: 'rgba(168, 85, 247, 0.15)', color: 'var(--accent-purple)' }}>
             <Wheat size={28} />
           </div>
