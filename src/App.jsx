@@ -130,7 +130,7 @@ export default function App() {
   const roleAllowedTabs = {
     Admin: ['dashboard', 'chickens', 'eggs', 'expenses', 'sales', 'feed', 'mortality', 'vaccination', 'reports', 'settings', 'python', 'database'],
     Sales: ['dashboard', 'eggs', 'sales', 'reports', 'settings'],
-    Construction: ['dashboard', 'chickens', 'eggs', 'expenses', 'feed', 'mortality', 'vaccination', 'reports', 'settings'],
+    Construction: ['dashboard', 'expenses', 'reports', 'settings'],
     Employee: ['dashboard', 'chickens', 'eggs', 'reports', 'settings']
   };
 

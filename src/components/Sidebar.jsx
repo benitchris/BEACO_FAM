@@ -21,15 +21,15 @@ export default function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSideb
 
   const allNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['Admin', 'Sales', 'Construction', 'Employee'] },
-    { id: 'chickens', label: 'Chickens / Flock', icon: Bird, roles: ['Admin', 'Construction', 'Employee'] },
-    { id: 'eggs', label: 'Egg Production', icon: Egg, roles: ['Admin', 'Sales', 'Construction', 'Employee'] },
-    { id: 'expenses', label: 'Workers & Expenses', icon: HardHat, roles: ['Admin', 'Construction'] },
+    { id: 'chickens', label: 'Chickens / Flock', icon: Bird, roles: ['Admin', 'Employee'] },
+    { id: 'eggs', label: 'Egg Production', icon: Egg, roles: ['Admin', 'Sales', 'Employee'] },
+    { id: 'expenses', label: role === 'Construction' ? 'Construction Expenses' : 'Workers & Expenses', icon: HardHat, roles: ['Admin', 'Construction'] },
     { id: 'sales', label: 'Sales & Revenue', icon: DollarSign, roles: ['Admin', 'Sales'] },
-    { id: 'feed', label: 'Feed Inventory', icon: Wheat, roles: ['Admin', 'Construction'] },
-    { id: 'mortality', label: 'Mortality Tracker', icon: Skull, roles: ['Admin', 'Construction'] },
-    { id: 'vaccination', label: 'Vaccination Log', icon: Syringe, roles: ['Admin', 'Construction'] },
+    { id: 'feed', label: 'Feed Inventory', icon: Wheat, roles: ['Admin'] },
+    { id: 'mortality', label: 'Mortality Tracker', icon: Skull, roles: ['Admin'] },
+    { id: 'vaccination', label: 'Vaccination Log', icon: Syringe, roles: ['Admin'] },
     { id: 'reports', label: 'Reports & Exports', icon: FileSpreadsheet, roles: ['Admin', 'Sales', 'Construction'], badge: 'PDF/XLS' },
-    { id: 'settings', label: 'Settings & Users', icon: Settings, roles: ['Admin', 'Sales', 'Construction'] },
+    { id: 'settings', label: 'Settings & Profile', icon: Settings, roles: ['Admin', 'Sales', 'Construction'] },
     { id: 'python', label: 'Python WASM Studio', icon: Terminal, roles: ['Admin'], badge: 'WASM' },
     { id: 'database', label: 'SQLite Console', icon: Database, roles: ['Admin'], badge: 'WASM' },
   ];
