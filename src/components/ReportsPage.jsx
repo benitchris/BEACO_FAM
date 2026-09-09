@@ -18,6 +18,8 @@ import { runQuery, getFarmMetrics } from '../wasm/db';
 import { exportToPdf, exportToExcel } from '../utils/reportExporter';
 
 export default function ReportsPage({ currentUser }) {
+  const role = currentUser?.role || 'Admin';
+
   const [downloading, setDownloading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
 
@@ -29,7 +31,8 @@ export default function ReportsPage({ currentUser }) {
   const [startDate, setStartDate] = useState('2026-01-01');
   const [endDate, setEndDate] = useState(todayStr);
 
-  const [activePreviewReport, setActivePreviewReport] = useState('eggs'); // 'eggs' | 'sales' | 'expenses'
+  const defaultTab = role === 'Construction' ? 'expenses' : role === 'Sales' ? 'sales' : 'eggs';
+  const [activePreviewReport, setActivePreviewReport] = useState(defaultTab); // 'eggs' | 'sales' | 'expenses'
 
   // Helper to compute date condition for SQL
   const getDateCondition = (dateColumn) => {
@@ -91,7 +94,7 @@ export default function ReportsPage({ currentUser }) {
     const pWhere = getDateCondition('p.payment_date');
     const cWhere = getDateCondition('expense_date');
 
-    const payroll = currentUser?.role === 'Construction' ? [] : runQuery(`
+    const payroll = role === 'Construction' ? [] : runQuery(`
       SELECT p.payment_date as event_date, w.full_name as title, 'Worker Wage Payroll' as category, 
              p.days_worked || ' days worked (' || COALESCE(p.notes, '-') || ')' as details, p.amount_paid as amount
       FROM worker_payments p
@@ -245,7 +248,7 @@ export default function ReportsPage({ currentUser }) {
 
       if (format === 'pdf') {
         await exportToPdf({
-          title: currentUser?.role === 'Construction' ? 'Construction & Building Expenses Report' : 'Workers Payroll & Construction Expenses Report',
+          title: role === 'Construction' ? 'Construction & Building Expenses Report' : 'Workers Payroll & Construction Expenses Report',
           subtitle,
           headers,
           rows,
@@ -332,6 +335,10 @@ export default function ReportsPage({ currentUser }) {
   const previewSalesData = loadSalesRecords();
   const previewExpenseData = loadExpenseRecords();
 
+  const isRoleAdmin = role === 'Admin';
+  const isRoleSales = role === 'Sales';
+  const isRoleConstruction = role === 'Construction';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
       {/* Page Header */}
@@ -410,122 +417,130 @@ export default function ReportsPage({ currentUser }) {
         </div>
       )}
 
-      {/* Grid of Report Cards */}
+      {/* Grid of Role-Filtered Report Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
         
-        {/* Master Executive Card */}
-        <div className="card card-hover" style={{ borderTop: '4px solid var(--accent-emerald)', background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(6,182,212,0.05))' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <div style={{ width: 44, height: 44, borderRadius: '12px', background: 'rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Sparkles size={24} color="var(--accent-emerald)" />
+        {/* Master Executive Card (Admin Only) */}
+        {isRoleAdmin && (
+          <div className="card card-hover" style={{ borderTop: '4px solid var(--accent-emerald)', background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(6,182,212,0.05))' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ width: 44, height: 44, borderRadius: '12px', background: 'rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Sparkles size={24} color="var(--accent-emerald)" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Master Executive Report</h3>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Consolidated operational & financial summary</div>
+              </div>
             </div>
-            <div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Master Executive Report</h3>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Consolidated operational & financial summary</div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+              Combines flock count, egg harvest, commercial sales revenue, feed stock, worker wages, and construction expenses into a single audit document.
+            </p>
+            <div style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)', fontWeight: 700, marginBottom: '1rem' }}>
+              Time Scope: {getTimeLabel()} ({sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'})
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={() => handleExportMaster('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                <FileText size={16} /> Export PDF
+              </button>
+              <button onClick={() => handleExportMaster('excel')} disabled={downloading} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                <Download size={16} /> Export Excel
+              </button>
             </div>
           </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-            Combines flock count, egg harvest, commercial sales revenue, feed stock, worker wages, and construction expenses into a single audit document.
-          </p>
-          <div style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)', fontWeight: 700, marginBottom: '1rem' }}>
-            Time Scope: {getTimeLabel()} ({sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'})
-          </div>
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button onClick={() => handleExportMaster('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-              <FileText size={16} /> Export PDF
-            </button>
-            <button onClick={() => handleExportMaster('excel')} disabled={downloading} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-              <Download size={16} /> Export Excel
-            </button>
-          </div>
-        </div>
+        )}
 
-        {/* Egg Production Card */}
-        <div className="card card-hover" style={{ borderTop: '4px solid var(--accent-amber)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <div style={{ width: 44, height: 44, borderRadius: '12px', background: 'rgba(245,158,11,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Egg size={24} color="var(--accent-amber)" />
+        {/* Egg Production Card (Admin & Sales) */}
+        {(isRoleAdmin || isRoleSales) && (
+          <div className="card card-hover" style={{ borderTop: '4px solid var(--accent-amber)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ width: 44, height: 44, borderRadius: '12px', background: 'rgba(245,158,11,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Egg size={24} color="var(--accent-amber)" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Egg Harvest & Production</h3>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Per-building daily harvest logs</div>
+              </div>
             </div>
-            <div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Egg Harvest & Production</h3>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Per-building daily harvest logs</div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+              Detailed breakdown of total eggs collected, broken eggs, and net yield across Building A, Building B, and Building C.
+            </p>
+            <div style={{ fontSize: '0.75rem', color: 'var(--accent-amber)', fontWeight: 700, marginBottom: '1rem' }}>
+              Time Scope: {getTimeLabel()} ({previewEggData.length} records, {sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'})
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={() => handleExportEggs('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                <FileText size={16} /> Export PDF
+              </button>
+              <button onClick={() => handleExportEggs('excel')} disabled={downloading} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                <Download size={16} /> Export Excel
+              </button>
             </div>
           </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-            Detailed breakdown of total eggs collected, broken eggs, and net yield across Building A, Building B, and Building C.
-          </p>
-          <div style={{ fontSize: '0.75rem', color: 'var(--accent-amber)', fontWeight: 700, marginBottom: '1rem' }}>
-            Time Scope: {getTimeLabel()} ({previewEggData.length} records, {sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'})
-          </div>
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button onClick={() => handleExportEggs('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-              <FileText size={16} /> Export PDF
-            </button>
-            <button onClick={() => handleExportEggs('excel')} disabled={downloading} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-              <Download size={16} /> Export Excel
-            </button>
-          </div>
-        </div>
+        )}
 
-        {/* Sales & Revenue Card */}
-        <div className="card card-hover" style={{ borderTop: '4px solid var(--accent-sky)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <div style={{ width: 44, height: 44, borderRadius: '12px', background: 'rgba(6,182,212,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <DollarSign size={24} color="var(--accent-sky)" />
+        {/* Sales & Revenue Card (Admin & Sales) */}
+        {(isRoleAdmin || isRoleSales) && (
+          <div className="card card-hover" style={{ borderTop: '4px solid var(--accent-sky)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ width: 44, height: 44, borderRadius: '12px', background: 'rgba(6,182,212,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <DollarSign size={24} color="var(--accent-sky)" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Sales & Revenue Report</h3>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Commercial egg sales & customer ledger</div>
+              </div>
             </div>
-            <div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Sales & Revenue Report</h3>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Commercial egg sales & customer ledger</div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+              List of customer transactions, egg quantities sold, unit pricing, and total revenue in RWF.
+            </p>
+            <div style={{ fontSize: '0.75rem', color: 'var(--accent-sky)', fontWeight: 700, marginBottom: '1rem' }}>
+              Time Scope: {getTimeLabel()} ({previewSalesData.length} sales, {sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'})
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={() => handleExportSales('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                <FileText size={16} /> Export PDF
+              </button>
+              <button onClick={() => handleExportSales('excel')} disabled={downloading} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                <Download size={16} /> Export Excel
+              </button>
             </div>
           </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-            List of customer transactions, egg quantities sold, unit pricing, and total revenue in RWF.
-          </p>
-          <div style={{ fontSize: '0.75rem', color: 'var(--accent-sky)', fontWeight: 700, marginBottom: '1rem' }}>
-            Time Scope: {getTimeLabel()} ({previewSalesData.length} sales, {sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'})
-          </div>
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button onClick={() => handleExportSales('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-              <FileText size={16} /> Export PDF
-            </button>
-            <button onClick={() => handleExportSales('excel')} disabled={downloading} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-              <Download size={16} /> Export Excel
-            </button>
-          </div>
-        </div>
+        )}
 
-        {/* Labor & Construction Card */}
-        <div className="card card-hover" style={{ borderTop: '4px solid var(--accent-rose)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <div style={{ width: 44, height: 44, borderRadius: '12px', background: 'rgba(244,63,94,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <HardHat size={24} color="var(--accent-rose)" />
+        {/* Labor & Construction Card (Admin & Construction) */}
+        {(isRoleAdmin || isRoleConstruction) && (
+          <div className="card card-hover" style={{ borderTop: '4px solid var(--accent-rose)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ width: 44, height: 44, borderRadius: '12px', background: 'rgba(244,63,94,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <HardHat size={24} color="var(--accent-rose)" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>{isRoleConstruction ? 'Construction Expenses Report' : 'Labor & Construction Expenses'}</h3>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{isRoleConstruction ? 'Building & site infrastructure costs' : 'Worker wages & capital project costs'}</div>
+              </div>
             </div>
-            <div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>{currentUser?.role === 'Construction' ? 'Construction Expenses Report' : 'Labor & Construction Expenses'}</h3>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{currentUser?.role === 'Construction' ? 'Building & site infrastructure costs' : 'Worker wages & capital project costs'}</div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+              {isRoleConstruction 
+                ? 'Audit log of roof repairs, feed silos, plumbing, solar equipment, and site build expenses.' 
+                : 'Audit log of employee wage disbursements, daily rates, roof repairs, feed silos, plumbing, and solar installation costs.'}
+            </p>
+            <div style={{ fontSize: '0.75rem', color: 'var(--accent-rose)', fontWeight: 700, marginBottom: '1rem' }}>
+              Time Scope: {getTimeLabel()} ({previewExpenseData.length} records, {sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'})
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={() => handleExportExpenses('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                <FileText size={16} /> Export PDF
+              </button>
+              <button onClick={() => handleExportExpenses('excel')} disabled={downloading} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                <Download size={16} /> Export Excel
+              </button>
             </div>
           </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-            {currentUser?.role === 'Construction' 
-              ? 'Audit log of roof repairs, feed silos, plumbing, solar equipment, and site build expenses.' 
-              : 'Audit log of employee wage disbursements, daily rates, roof repairs, feed silos, plumbing, and solar installation costs.'}
-          </p>
-          <div style={{ fontSize: '0.75rem', color: 'var(--accent-rose)', fontWeight: 700, marginBottom: '1rem' }}>
-            Time Scope: {getTimeLabel()} ({previewExpenseData.length} records, {sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'})
-          </div>
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button onClick={() => handleExportExpenses('pdf')} disabled={downloading} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-              <FileText size={16} /> Export PDF
-            </button>
-            <button onClick={() => handleExportExpenses('excel')} disabled={downloading} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-              <Download size={16} /> Export Excel
-            </button>
-          </div>
-        </div>
+        )}
 
       </div>
 
-      {/* Live Audit Table Preview Section */}
+      {/* Live Audit Table Preview Section (Role-Filtered) */}
       <div className="card" style={{ marginTop: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
           <div>
@@ -537,30 +552,36 @@ export default function ReportsPage({ currentUser }) {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              onClick={() => setActivePreviewReport('eggs')}
-              className={`btn btn-sm ${activePreviewReport === 'eggs' ? 'btn-primary' : 'btn-secondary'}`}
-            >
-              Egg Production ({previewEggData.length})
-            </button>
-            <button
-              onClick={() => setActivePreviewReport('sales')}
-              className={`btn btn-sm ${activePreviewReport === 'sales' ? 'btn-primary' : 'btn-secondary'}`}
-            >
-              Sales ({previewSalesData.length})
-            </button>
-            <button
-              onClick={() => setActivePreviewReport('expenses')}
-              className={`btn btn-sm ${activePreviewReport === 'expenses' ? 'btn-primary' : 'btn-secondary'}`}
-            >
-              Expenses ({previewExpenseData.length})
-            </button>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {(isRoleAdmin || isRoleSales) && (
+              <button
+                onClick={() => setActivePreviewReport('eggs')}
+                className={`btn btn-sm ${activePreviewReport === 'eggs' ? 'btn-primary' : 'btn-secondary'}`}
+              >
+                Egg Production ({previewEggData.length})
+              </button>
+            )}
+            {(isRoleAdmin || isRoleSales) && (
+              <button
+                onClick={() => setActivePreviewReport('sales')}
+                className={`btn btn-sm ${activePreviewReport === 'sales' ? 'btn-primary' : 'btn-secondary'}`}
+              >
+                Sales ({previewSalesData.length})
+              </button>
+            )}
+            {(isRoleAdmin || isRoleConstruction) && (
+              <button
+                onClick={() => setActivePreviewReport('expenses')}
+                className={`btn btn-sm ${activePreviewReport === 'expenses' ? 'btn-primary' : 'btn-secondary'}`}
+              >
+                Construction Expenses ({previewExpenseData.length})
+              </button>
+            )}
           </div>
         </div>
 
         <div className="table-container">
-          {activePreviewReport === 'eggs' && (
+          {activePreviewReport === 'eggs' && (isRoleAdmin || isRoleSales) && (
             <table>
               <thead>
                 <tr>
@@ -591,7 +612,7 @@ export default function ReportsPage({ currentUser }) {
             </table>
           )}
 
-          {activePreviewReport === 'sales' && (
+          {activePreviewReport === 'sales' && (isRoleAdmin || isRoleSales) && (
             <table>
               <thead>
                 <tr>
@@ -622,7 +643,7 @@ export default function ReportsPage({ currentUser }) {
             </table>
           )}
 
-          {activePreviewReport === 'expenses' && (
+          {activePreviewReport === 'expenses' && (isRoleAdmin || isRoleConstruction) && (
             <table>
               <thead>
                 <tr>
