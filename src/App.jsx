@@ -71,6 +71,7 @@ export default function App() {
       })
       .catch((err) => {
         console.error('Failed to initialize WebAssembly database:', err);
+        setDbReady(true);
       });
   }, []);
 

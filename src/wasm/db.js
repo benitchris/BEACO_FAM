@@ -1,7 +1,7 @@
 import initSqlJs from 'sql.js';
 
 let db = null;
-const STORAGE_KEY = 'BEACON_FAM_WASM_SQLITE_DB_v3';
+const STORAGE_KEY = 'BEACON_FAM_WASM_SQLITE_DB_v4';
 
 // Determine base path for WASM file (works both locally and on GitHub Pages)
 const BASE_URL = import.meta.env.BASE_URL || '/';
@@ -230,19 +230,40 @@ export async function initWasmDatabase() {
 
     const savedDbBase64 = localStorage.getItem(STORAGE_KEY);
     if (savedDbBase64) {
-      const binaryArray = Uint8Array.from(atob(savedDbBase64), c => c.charCodeAt(0));
-      db = new SQL.Database(binaryArray);
-      console.log('BEACO FARM: SQLite WASM Database loaded from LocalStorage.');
+      try {
+        let binary = atob(savedDbBase64);
+        let len = binary.length;
+        let bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        db = new SQL.Database(bytes);
+        console.log('BEACON FAM: SQLite WASM Database loaded from LocalStorage.');
+      } catch (loadErr) {
+        console.warn('BEACON FAM: Saved LocalStorage DB corrupt or outdated, re-initializing fresh database...', loadErr);
+        localStorage.removeItem(STORAGE_KEY);
+        db = new SQL.Database();
+        db.run(DEFAULT_SQL_SCHEMA);
+        db.run(INITIAL_SEED_DATA);
+        saveDatabaseState();
+      }
     } else {
       db = new SQL.Database();
       db.run(DEFAULT_SQL_SCHEMA);
       db.run(INITIAL_SEED_DATA);
       saveDatabaseState();
-      console.log('BEACO FARM: SQLite WASM Database initialized with default schema and seed data.');
+      console.log('BEACON FAM: SQLite WASM Database initialized with default schema and seed data.');
     }
   } catch (err) {
-    console.error('BEACO FARM: Failed to initialize SQLite WASM:', err);
-    throw err;
+    console.error('BEACON FAM: Failed to initialize SQLite WASM:', err);
+    try {
+      const SQL = await initSqlJs({ locateFile: () => `${BASE_URL}sql-wasm.wasm` });
+      db = new SQL.Database();
+      db.run(DEFAULT_SQL_SCHEMA);
+      db.run(INITIAL_SEED_DATA);
+    } catch (e) {
+      console.error('Emergency DB initialization failed:', e);
+    }
   }
 
   return db;
@@ -252,7 +273,12 @@ export function saveDatabaseState() {
   if (!db) return;
   try {
     const data = db.export();
-    const base64 = btoa(String.fromCharCode.apply(null, data));
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < data.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, data.subarray(i, i + chunkSize));
+    }
+    const base64 = btoa(binary);
     localStorage.setItem(STORAGE_KEY, base64);
   } catch (e) {
     console.error('Error persisting database:', e);
@@ -290,46 +316,55 @@ export function executeSql(sql) {
 }
 
 export function getFarmMetrics() {
-  const chickens = runQuery("SELECT COALESCE(SUM(quantity), 0) as total FROM chickens")[0]?.total || 0;
-  const eggs = runQuery("SELECT COALESCE(SUM(eggs_collected), 0) as total FROM egg_production")[0]?.total || 0;
-  const customers = runQuery("SELECT COUNT(*) as total FROM customers")[0]?.total || 0;
-  const revenue = runQuery("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales")[0]?.total || 0;
-  const deaths = runQuery("SELECT COALESCE(SUM(quantity), 0) as total FROM mortality")[0]?.total || 0;
-  const feed = runQuery("SELECT COALESCE(SUM(quantity), 0) as total_purchased, COALESCE(SUM(consumed_kg), 0) as total_consumed, COALESCE(SUM(remaining_kg), 0) as total_remaining FROM feed_management")[0] || { total_purchased: 0, total_consumed: 0, total_remaining: 0 };
-  const totalWages = runQuery("SELECT COALESCE(SUM(amount_paid), 0) as total FROM worker_payments")[0]?.total || 0;
-  const totalConstruction = runQuery("SELECT COALESCE(SUM(amount), 0) as total FROM construction_expenses")[0]?.total || 0;
-  const workerCount = runQuery("SELECT COUNT(*) as total FROM workers WHERE status = 'Active'")[0]?.total || 0;
+  try {
+    const chickens = runQuery("SELECT COALESCE(SUM(quantity), 0) as total FROM chickens")[0]?.total || 0;
+    const eggs = runQuery("SELECT COALESCE(SUM(eggs_collected), 0) as total FROM egg_production")[0]?.total || 0;
+    const customers = runQuery("SELECT COUNT(*) as total FROM customers")[0]?.total || 0;
+    const revenue = runQuery("SELECT COALESCE(SUM(total_amount), 0) as total FROM sales")[0]?.total || 0;
+    const deaths = runQuery("SELECT COALESCE(SUM(quantity), 0) as total FROM mortality")[0]?.total || 0;
+    const feed = runQuery("SELECT COALESCE(SUM(quantity), 0) as total_purchased, COALESCE(SUM(consumed_kg), 0) as total_consumed, COALESCE(SUM(remaining_kg), 0) as total_remaining FROM feed_management")[0] || { total_purchased: 0, total_consumed: 0, total_remaining: 0 };
+    const totalWages = runQuery("SELECT COALESCE(SUM(amount_paid), 0) as total FROM worker_payments")[0]?.total || 0;
+    const totalConstruction = runQuery("SELECT COALESCE(SUM(amount), 0) as total FROM construction_expenses")[0]?.total || 0;
+    const workerCount = runQuery("SELECT COUNT(*) as total FROM workers WHERE status = 'Active'")[0]?.total || 0;
 
-  const mortalityRate = chickens > 0 ? ((deaths / chickens) * 100).toFixed(2) : 0;
-  const survivalRate = chickens > 0 ? (((chickens - deaths) / chickens) * 100).toFixed(2) : 100;
-  const eggsPerChicken = chickens > 0 ? (eggs / chickens).toFixed(2) : 0;
-  const totalExpenses = Number(totalWages) + Number(totalConstruction);
+    const mortalityRate = chickens > 0 ? ((deaths / chickens) * 100).toFixed(2) : 0;
+    const survivalRate = chickens > 0 ? (((chickens - deaths) / chickens) * 100).toFixed(2) : 100;
+    const eggsPerChicken = chickens > 0 ? (eggs / chickens).toFixed(2) : 0;
+    const totalExpenses = Number(totalWages) + Number(totalConstruction);
 
-  let overallStatus = "GOOD PERFORMANCE";
-  if (mortalityRate > 5 || feed.total_remaining <= 0) {
-    overallStatus = "ATTENTION REQUIRED";
-  } else if (eggsPerChicken >= 5) {
-    overallStatus = "EXCELLENT PERFORMANCE";
+    let overallStatus = "GOOD PERFORMANCE";
+    if (mortalityRate > 5 || feed.total_remaining <= 0) {
+      overallStatus = "ATTENTION REQUIRED";
+    } else if (eggsPerChicken >= 5) {
+      overallStatus = "EXCELLENT PERFORMANCE";
+    }
+
+    return {
+      totalChickens: chickens,
+      totalEggs: eggs,
+      totalCustomers: customers,
+      totalRevenue: revenue,
+      totalDeaths: deaths,
+      feedPurchased: feed.total_purchased,
+      feedConsumed: feed.total_consumed,
+      feedRemaining: feed.total_remaining,
+      mortalityRate,
+      survivalRate,
+      eggsPerChicken,
+      overallStatus,
+      totalWages,
+      totalConstruction,
+      totalExpenses,
+      workerCount
+    };
+  } catch (err) {
+    console.error('Error computing metrics:', err);
+    return {
+      totalChickens: 0, totalEggs: 0, totalCustomers: 0, totalRevenue: 0, totalDeaths: 0,
+      feedPurchased: 0, feedConsumed: 0, feedRemaining: 0, mortalityRate: '0.00', survivalRate: '100.00',
+      eggsPerChicken: '0.00', overallStatus: 'ONLINE', totalWages: 0, totalConstruction: 0, totalExpenses: 0, workerCount: 0
+    };
   }
-
-  return {
-    totalChickens: chickens,
-    totalEggs: eggs,
-    totalCustomers: customers,
-    totalRevenue: revenue,
-    totalDeaths: deaths,
-    feedPurchased: feed.total_purchased,
-    feedConsumed: feed.total_consumed,
-    feedRemaining: feed.total_remaining,
-    mortalityRate,
-    survivalRate,
-    eggsPerChicken,
-    overallStatus,
-    totalWages,
-    totalConstruction,
-    totalExpenses,
-    workerCount
-  };
 }
 
 // User Authentication & Management Helpers
@@ -386,4 +421,3 @@ export function updatePassword(userId, newPassword) {
   executeSql(`UPDATE users SET password = '${newPassword.replace(/'/g, "''")}' WHERE id = ${userId}`);
   return true;
 }
-
