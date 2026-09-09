@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -18,6 +18,68 @@ import DatabaseConsole from './components/DatabaseConsole';
 import { initWasmDatabase, getFarmMetrics } from './wasm/db';
 
 const SESSION_KEY = 'BEACON_FAM_LOGGED_USER_SESSION_v1';
+
+// React Error Boundary Component to prevent blank screen crashes
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('BEACON FAM App UI Error Caught:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#0f172a',
+          color: '#fff',
+          padding: '2rem'
+        }}>
+          <div className="card" style={{ maxWidth: '500px', width: '100%', textAlign: 'center', padding: '2.5rem', background: '#1e293b', border: '1px solid rgba(244,63,94,0.3)' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f43f5e', marginBottom: '0.75rem' }}>
+              ⚠️ Application View Error
+            </h2>
+            <p style={{ color: '#94a3b8', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
+              {this.state.error?.message || 'A temporary rendering error occurred while displaying this section.'}
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button 
+                onClick={() => {
+                  this.setState({ hasError: false, error: null });
+                  if (this.props.onReset) this.props.onReset();
+                }} 
+                className="btn btn-primary"
+              >
+                Reload View
+              </button>
+              <button 
+                onClick={() => {
+                  localStorage.removeItem(SESSION_KEY);
+                  window.location.reload();
+                }} 
+                className="btn btn-secondary"
+              >
+                Sign Out & Restart
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -139,88 +201,90 @@ export default function App() {
   const currentTabAllowed = allowed.includes(activeTab);
 
   return (
-    <div className="app-container">
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-        currentUser={currentUser}
-      />
-
-      <div className="main-content">
-        <Header
+    <ErrorBoundary onReset={() => setActiveTab('dashboard')}>
+      <div className="app-container">
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
-          theme={theme}
-          setTheme={setTheme}
-          onRefreshData={refreshFarmData}
           currentUser={currentUser}
-          onLogout={handleLogout}
-          onNavigate={setActiveTab}
         />
 
-        <main className="page-body">
-          {!currentTabAllowed ? (
-            <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
-              <div className="card" style={{ maxWidth: '500px', margin: '0 auto', textAlign: 'center', padding: '2.5rem' }}>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-rose)', marginBottom: '0.5rem' }}>
-                  🚫 Access Restricted
-                </h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
-                  Your account role (<strong>{role}</strong>) does not have permission to view this section.
-                </p>
-                <button onClick={() => setActiveTab('dashboard')} className="btn btn-primary">
-                  Return to Dashboard
-                </button>
+        <div className="main-content">
+          <Header
+            sidebarOpen={sidebarOpen}
+            setSidebarOpen={setSidebarOpen}
+            theme={theme}
+            setTheme={setTheme}
+            onRefreshData={refreshFarmData}
+            currentUser={currentUser}
+            onLogout={handleLogout}
+            onNavigate={setActiveTab}
+          />
+
+          <main className="page-body">
+            {!currentTabAllowed ? (
+              <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+                <div className="card" style={{ maxWidth: '500px', margin: '0 auto', textAlign: 'center', padding: '2.5rem' }}>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-rose)', marginBottom: '0.5rem' }}>
+                    🚫 Access Restricted
+                  </h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
+                    Your account role (<strong>{role}</strong>) does not have permission to view this section.
+                  </p>
+                  <button onClick={() => setActiveTab('dashboard')} className="btn btn-primary">
+                    Return to Dashboard
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <>
-              {activeTab === 'dashboard' && (
-                <Dashboard
-                  metrics={metrics}
-                  onNavigate={setActiveTab}
-                  currentUser={currentUser}
-                />
-              )}
-              {activeTab === 'chickens' && (
-                <ChickensPage onRefreshData={refreshFarmData} />
-              )}
-              {activeTab === 'eggs' && (
-                <EggsPage onRefreshData={refreshFarmData} />
-              )}
-              {activeTab === 'sales' && (
-                <SalesPage onRefreshData={refreshFarmData} />
-              )}
-              {activeTab === 'expenses' && (
-                <ExpensesPage onRefreshData={refreshFarmData} currentUser={currentUser} />
-              )}
-              {activeTab === 'feed' && (
-                <FeedPage onRefreshData={refreshFarmData} />
-              )}
-              {activeTab === 'mortality' && (
-                <MortalityPage onRefreshData={refreshFarmData} />
-              )}
-              {activeTab === 'vaccination' && (
-                <VaccinationPage onRefreshData={refreshFarmData} />
-              )}
-              {activeTab === 'reports' && (
-                <ReportsPage currentUser={currentUser} />
-              )}
-              {activeTab === 'settings' && (
-                <SettingsPage currentUser={currentUser} onUserUpdated={handleUserUpdated} />
-              )}
-              {activeTab === 'python' && (
-                <PythonWasmConsole metrics={metrics} />
-              )}
-              {activeTab === 'database' && (
-                <DatabaseConsole onRefreshData={refreshFarmData} />
-              )}
-            </>
-          )}
-        </main>
+            ) : (
+              <>
+                {activeTab === 'dashboard' && (
+                  <Dashboard
+                    metrics={metrics}
+                    onNavigate={setActiveTab}
+                    currentUser={currentUser}
+                  />
+                )}
+                {activeTab === 'chickens' && (
+                  <ChickensPage onRefreshData={refreshFarmData} />
+                )}
+                {activeTab === 'eggs' && (
+                  <EggsPage onRefreshData={refreshFarmData} />
+                )}
+                {activeTab === 'sales' && (
+                  <SalesPage onRefreshData={refreshFarmData} />
+                )}
+                {activeTab === 'expenses' && (
+                  <ExpensesPage onRefreshData={refreshFarmData} currentUser={currentUser} />
+                )}
+                {activeTab === 'feed' && (
+                  <FeedPage onRefreshData={refreshFarmData} />
+                )}
+                {activeTab === 'mortality' && (
+                  <MortalityPage onRefreshData={refreshFarmData} />
+                )}
+                {activeTab === 'vaccination' && (
+                  <VaccinationPage onRefreshData={refreshFarmData} />
+                )}
+                {activeTab === 'reports' && (
+                  <ReportsPage currentUser={currentUser} />
+                )}
+                {activeTab === 'settings' && (
+                  <SettingsPage currentUser={currentUser} onUserUpdated={handleUserUpdated} />
+                )}
+                {activeTab === 'python' && (
+                  <PythonWasmConsole metrics={metrics} />
+                )}
+                {activeTab === 'database' && (
+                  <DatabaseConsole onRefreshData={refreshFarmData} />
+                )}
+              </>
+            )}
+          </main>
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }

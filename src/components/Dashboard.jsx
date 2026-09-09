@@ -15,7 +15,8 @@ import {
   Building2,
   Users,
   FileSpreadsheet,
-  Plus
+  Plus,
+  Wrench
 } from 'lucide-react';
 
 export default function Dashboard({ metrics, onNavigate, currentUser }) {
