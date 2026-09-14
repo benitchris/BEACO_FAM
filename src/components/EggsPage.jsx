@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Egg, Building2, TrendingUp } from 'lucide-react';
-import { runQuery, executeSql } from '../wasm/db';
+import { Plus, Trash2, Egg, Building2, TrendingUp, Activity } from 'lucide-react';
+import { runQuery, executeSql, getFarmMetrics } from '../wasm/db';
 
 const BUILDING_COLORS = {
   1: { color: '#10b981', bg: 'rgba(16, 185, 129, 0.12)', label: 'Building A' },
@@ -15,6 +15,7 @@ export default function EggsPage({ onRefreshData }) {
   const [categories, setCategories] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [filterBuilding, setFilterBuilding] = useState('all');
+  const [farmMetrics, setFarmMetrics] = useState({});
 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [buildingId, setBuildingId] = useState(1);
@@ -26,6 +27,9 @@ export default function EggsPage({ onRefreshData }) {
     try {
       const bldgs = runQuery("SELECT * FROM buildings ORDER BY id");
       setBuildings(bldgs);
+
+      const m = getFarmMetrics();
+      setFarmMetrics(m);
 
       // Per-building totals
       const stats = runQuery(`
@@ -124,8 +128,8 @@ export default function EggsPage({ onRefreshData }) {
         background: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(16,185,129,0.08))',
         border: '1px solid rgba(245,158,11,0.25)',
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-        gap: '1.5rem',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: '1.25rem',
         padding: '1.5rem 2rem'
       }}>
         <div style={{ textAlign: 'center' }}>
@@ -149,6 +153,13 @@ export default function EggsPage({ onRefreshData }) {
             {grandTotal.collected > 0 ? ((grandTotal.broken / grandTotal.collected) * 100).toFixed(1) : 0}%
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Farm-wide average</div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Laying Efficiency</div>
+          <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--accent-emerald)', lineHeight: 1.1 }}>
+            {farmMetrics.layingRatePct || '0.0'}%
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)', fontWeight: 600 }}>(Daily Eggs ÷ Active Flock) × 100</div>
         </div>
       </div>
 

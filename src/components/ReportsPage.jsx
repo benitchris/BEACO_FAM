@@ -145,6 +145,7 @@ export default function ReportsPage({ currentUser }) {
       const subtitle = `Time Scope: ${getTimeLabel()} | Date Sorted: ${sortOrder === 'desc' ? 'Newest First ⬇️' : 'Oldest First ⬆️'} (${records.length} records)`;
 
       if (format === 'pdf') {
+        const farmM = getFarmMetrics();
         await exportToPdf({
           title: 'Egg Harvest & Building Production Report',
           subtitle,
@@ -153,7 +154,8 @@ export default function ReportsPage({ currentUser }) {
           summaryCards: [
             { label: 'Total Collected', value: totalCollected.toLocaleString(), color: 'emerald' },
             { label: 'Total Broken', value: totalBroken.toLocaleString(), color: 'rose' },
-            { label: 'Net Available', value: totalNet.toLocaleString(), color: 'emerald' }
+            { label: 'Net Available', value: totalNet.toLocaleString(), color: 'emerald' },
+            { label: 'Laying Rate (%)', value: `${farmM.layingRatePct}%`, color: 'emerald' }
           ],
           filename: `beacon_fam_egg_production_${timePreset}_${sortOrder}`,
           generatedBy: currentUser?.full_name || currentUser?.username
@@ -292,6 +294,7 @@ export default function ReportsPage({ currentUser }) {
         ['Flock Management', 'Total Active Chickens', metrics.totalChickens.toLocaleString(), 'Active Flock'],
         ['Flock Management', 'Mortality Deaths', metrics.totalDeaths.toLocaleString(), `${metrics.mortalityRate}% Mortality Rate`],
         ['Egg Production', 'Cumulative Eggs Harvested', metrics.totalEggs.toLocaleString(), `${metrics.eggsPerChicken} eggs / chicken average`],
+        ['Egg Laying Efficiency', 'Hen-Day Laying Efficiency Rate (%)', `${metrics.layingRatePct}%`, `Daily Harvest (${metrics.latestDailyHarvest.toLocaleString()} eggs) ÷ Active Flock (${metrics.totalChickens.toLocaleString()})`],
         ['Commercial Sales', 'Total Revenue Generated', `RWF ${metrics.totalRevenue.toLocaleString()}`, `${metrics.totalCustomers} Active Buyers`],
         ['Feed Stock', 'Remaining Feed Inventory', `${metrics.feedRemaining.toLocaleString()} kg`, metrics.feedRemaining < 100 ? 'Low Stock Warning' : 'Optimal Stock'],
         ['Labor Expenses', 'Total Worker Wages Paid', `RWF ${metrics.totalWages.toLocaleString()}`, `${metrics.workerCount} Active Staff`],
@@ -307,8 +310,9 @@ export default function ReportsPage({ currentUser }) {
           rows,
           summaryCards: [
             { label: 'Flock Count', value: metrics.totalChickens.toLocaleString(), color: 'emerald' },
-            { label: 'Total Sales Revenue', value: `RWF ${metrics.totalRevenue.toLocaleString()}`, color: 'emerald' },
-            { label: 'Total Labor/Capital', value: `RWF ${metrics.totalExpenses.toLocaleString()}`, color: 'rose' }
+            { label: 'Laying Rate (%)', value: `${metrics.layingRatePct}%`, color: 'emerald' },
+            { label: 'Sales Revenue', value: `RWF ${metrics.totalRevenue.toLocaleString()}`, color: 'emerald' },
+            { label: 'Total Expenses', value: `RWF ${metrics.totalExpenses.toLocaleString()}`, color: 'rose' }
           ],
           filename: `beacon_fam_master_executive_${timePreset}_${sortOrder}`,
           generatedBy: currentUser?.full_name || currentUser?.username

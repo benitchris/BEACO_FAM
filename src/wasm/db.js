@@ -327,6 +327,14 @@ export function getFarmMetrics() {
     const totalConstruction = runQuery("SELECT COALESCE(SUM(amount), 0) as total FROM construction_expenses")[0]?.total || 0;
     const workerCount = runQuery("SELECT COUNT(*) as total FROM workers WHERE status = 'Active'")[0]?.total || 0;
 
+    // Latest daily harvest date & total daily eggs
+    const latestHarvestRow = runQuery("SELECT production_date, SUM(eggs_collected) as daily_total FROM egg_production GROUP BY production_date ORDER BY production_date DESC LIMIT 1")[0];
+    const latestDailyHarvest = latestHarvestRow?.daily_total || 0;
+    const latestHarvestDate = latestHarvestRow?.production_date || '-';
+
+    // Hen-Day Laying Efficiency Rate %: (Daily Eggs / Total Active Chickens) * 100
+    const layingRatePct = chickens > 0 ? Math.min(100, (latestDailyHarvest / chickens) * 100).toFixed(1) : '0.0';
+
     const mortalityRate = chickens > 0 ? ((deaths / chickens) * 100).toFixed(2) : 0;
     const survivalRate = chickens > 0 ? (((chickens - deaths) / chickens) * 100).toFixed(2) : 100;
     const eggsPerChicken = chickens > 0 ? (eggs / chickens).toFixed(2) : 0;
@@ -335,7 +343,7 @@ export function getFarmMetrics() {
     let overallStatus = "GOOD PERFORMANCE";
     if (mortalityRate > 5 || feed.total_remaining <= 0) {
       overallStatus = "ATTENTION REQUIRED";
-    } else if (eggsPerChicken >= 5) {
+    } else if (layingRatePct >= 75) {
       overallStatus = "EXCELLENT PERFORMANCE";
     }
 
@@ -351,6 +359,9 @@ export function getFarmMetrics() {
       mortalityRate,
       survivalRate,
       eggsPerChicken,
+      latestDailyHarvest,
+      latestHarvestDate,
+      layingRatePct,
       overallStatus,
       totalWages,
       totalConstruction,

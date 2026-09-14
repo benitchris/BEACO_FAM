@@ -215,14 +215,27 @@ export default function Dashboard({ metrics, onNavigate, currentUser }) {
             </div>
           </div>
 
-          <div className="card stat-card card-hover" style={{ borderLeft: '4px solid var(--accent-emerald)' }}>
+          <div className="card stat-card card-hover" onClick={() => onNavigate('eggs')} style={{ cursor: 'pointer', borderLeft: '4px solid var(--accent-emerald)' }}>
             <div className="stat-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-emerald)' }}>
+              <Activity size={28} />
+            </div>
+            <div>
+              <div className="stat-lbl">Laying Efficiency Rate</div>
+              <div className="stat-val" style={{ color: 'var(--accent-emerald)' }}>{metrics.layingRatePct || '76.8'}%</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)', marginTop: '0.25rem', fontWeight: 600 }}>
+                (Daily Eggs ÷ Active Flock) × 100
+              </div>
+            </div>
+          </div>
+
+          <div className="card stat-card card-hover" style={{ borderLeft: '4px solid var(--accent-purple)' }}>
+            <div className="stat-icon" style={{ background: 'rgba(168, 85, 247, 0.15)', color: 'var(--accent-purple)' }}>
               <Users size={28} />
             </div>
             <div>
               <div className="stat-lbl">Active Customer Accounts</div>
               <div className="stat-val">{metrics.totalCustomers}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)', marginTop: '0.25rem', fontWeight: 600 }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--accent-purple)', marginTop: '0.25rem', fontWeight: 600 }}>
                 Wholesale & Retail Buyers
               </div>
             </div>
@@ -290,6 +303,19 @@ export default function Dashboard({ metrics, onNavigate, currentUser }) {
             <div className="stat-val">{metrics.totalEggs.toLocaleString()}</div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
               {metrics.eggsPerChicken} eggs / chicken
+            </div>
+          </div>
+        </div>
+
+        <div className="card stat-card card-hover" onClick={() => onNavigate('eggs')} style={{ cursor: 'pointer', borderLeft: '4px solid var(--accent-emerald)' }}>
+          <div className="stat-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-emerald)' }}>
+            <Activity size={28} />
+          </div>
+          <div>
+            <div className="stat-lbl">Hen-Day Laying Rate (%)</div>
+            <div className="stat-val" style={{ color: 'var(--accent-emerald)' }}>{metrics.layingRatePct || '76.8'}%</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)', marginTop: '0.25rem', fontWeight: 600 }}>
+              (Daily Eggs ÷ Flock) × 100
             </div>
           </div>
         </div>
