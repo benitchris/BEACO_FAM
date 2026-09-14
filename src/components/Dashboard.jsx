@@ -18,6 +18,7 @@ import {
   Plus,
   Wrench
 } from 'lucide-react';
+import { formatEggTrays } from '../utils/eggUtils';
 
 export default function Dashboard({ metrics, onNavigate, currentUser }) {
   const role = currentUser?.role || 'Admin';
@@ -208,9 +209,9 @@ export default function Dashboard({ metrics, onNavigate, currentUser }) {
             </div>
             <div>
               <div className="stat-lbl">Total Eggs Harvested</div>
-              <div className="stat-val">{metrics.totalEggs.toLocaleString()}</div>
+              <div className="stat-val" style={{ fontSize: '1.35rem' }}>{formatEggTrays(metrics.totalEggs)}</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                Harvest ready for dispatch
+                {metrics.totalEggs.toLocaleString()} total eggs ready for sale
               </div>
             </div>
           </div>
@@ -300,9 +301,9 @@ export default function Dashboard({ metrics, onNavigate, currentUser }) {
           </div>
           <div>
             <div className="stat-lbl">Total Eggs Harvested</div>
-            <div className="stat-val">{metrics.totalEggs.toLocaleString()}</div>
+            <div className="stat-val" style={{ fontSize: '1.35rem' }}>{formatEggTrays(metrics.totalEggs)}</div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-              {metrics.eggsPerChicken} eggs / chicken
+              {metrics.totalEggs.toLocaleString()} total eggs ({metrics.eggsPerChicken} eggs/chicken)
             </div>
           </div>
         </div>

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { runQuery, getFarmMetrics } from '../wasm/db';
 import { exportToPdf, exportToExcel } from '../utils/reportExporter';
+import { formatEggTrays } from '../utils/eggUtils';
 
 export default function ReportsPage({ currentUser }) {
   const role = currentUser?.role || 'Admin';
@@ -128,14 +129,14 @@ export default function ReportsPage({ currentUser }) {
 
     try {
       const records = loadEggRecords();
-      const headers = ['Date', 'Building / Shed', 'Category', 'Collected', 'Broken', 'Net Available'];
+      const headers = ['Date', 'Building / Shed', 'Category', 'Collected (Trays + Loose)', 'Broken', 'Net Available (Trays + Loose)'];
       const rows = records.map(r => [
         r.production_date,
         r.building_name || 'Building A',
         r.category_name || 'Layers',
-        r.eggs_collected,
-        r.broken_eggs,
-        r.remaining_eggs
+        `${formatEggTrays(r.eggs_collected)} (${r.eggs_collected})`,
+        formatEggTrays(r.broken_eggs),
+        `${formatEggTrays(r.remaining_eggs)} (${r.remaining_eggs})`
       ]);
 
       const totalCollected = records.reduce((a, b) => a + Number(b.eggs_collected), 0);
@@ -152,9 +153,9 @@ export default function ReportsPage({ currentUser }) {
           headers,
           rows,
           summaryCards: [
-            { label: 'Total Collected', value: totalCollected.toLocaleString(), color: 'emerald' },
-            { label: 'Total Broken', value: totalBroken.toLocaleString(), color: 'rose' },
-            { label: 'Net Available', value: totalNet.toLocaleString(), color: 'emerald' },
+            { label: 'Total Collected', value: formatEggTrays(totalCollected), color: 'emerald' },
+            { label: 'Total Broken', value: formatEggTrays(totalBroken), color: 'rose' },
+            { label: 'Net Available', value: formatEggTrays(totalNet), color: 'emerald' },
             { label: 'Laying Rate (%)', value: `${farmM.layingRatePct}%`, color: 'emerald' }
           ],
           filename: `beacon_fam_egg_production_${timePreset}_${sortOrder}`,
@@ -293,7 +294,7 @@ export default function ReportsPage({ currentUser }) {
         ['Time Scope & Filter', 'Selected Range & Order', `${getTimeLabel()}`, sortOrder === 'desc' ? 'Sorted Newest First ⬇️' : 'Sorted Oldest First ⬆️'],
         ['Flock Management', 'Total Active Chickens', metrics.totalChickens.toLocaleString(), 'Active Flock'],
         ['Flock Management', 'Mortality Deaths', metrics.totalDeaths.toLocaleString(), `${metrics.mortalityRate}% Mortality Rate`],
-        ['Egg Production', 'Cumulative Eggs Harvested', metrics.totalEggs.toLocaleString(), `${metrics.eggsPerChicken} eggs / chicken average`],
+        ['Egg Production', 'Cumulative Eggs Harvested', `${formatEggTrays(metrics.totalEggs)} (${metrics.totalEggs.toLocaleString()} total)`, `${metrics.eggsPerChicken} eggs / chicken average`],
         ['Egg Laying Efficiency', 'Hen-Day Laying Efficiency Rate (%)', `${metrics.layingRatePct}%`, `Daily Harvest (${metrics.latestDailyHarvest.toLocaleString()} eggs) ÷ Active Flock (${metrics.totalChickens.toLocaleString()})`],
         ['Commercial Sales', 'Total Revenue Generated', `RWF ${metrics.totalRevenue.toLocaleString()}`, `${metrics.totalCustomers} Active Buyers`],
         ['Feed Stock', 'Remaining Feed Inventory', `${metrics.feedRemaining.toLocaleString()} kg`, metrics.feedRemaining < 100 ? 'Low Stock Warning' : 'Optimal Stock'],

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Egg, Building2, TrendingUp, Activity } from 'lucide-react';
+import { Plus, Trash2, Egg, Building2, TrendingUp, Activity, Layers } from 'lucide-react';
 import { runQuery, executeSql, getFarmMetrics } from '../wasm/db';
+import { formatEggTrays, getTrayBreakdown } from '../utils/eggUtils';
 
 const BUILDING_COLORS = {
   1: { color: '#10b981', bg: 'rgba(16, 185, 129, 0.12)', label: 'Building A' },
@@ -110,10 +111,10 @@ export default function EggsPage({ onRefreshData }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Egg color="var(--accent-amber)" /> Egg Production — Per Building
+            <Egg color="var(--accent-amber)" /> Egg Production — Per Building & Trays
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-            Track daily harvests from Building A, B, and C separately. All totals computed automatically.
+            Track daily harvests grouped in <strong>Trays (30 eggs/tray)</strong> & loose remainders for each shed.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -128,38 +129,54 @@ export default function EggsPage({ onRefreshData }) {
         background: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(16,185,129,0.08))',
         border: '1px solid rgba(245,158,11,0.25)',
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
         gap: '1.25rem',
         padding: '1.5rem 2rem'
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Collected</div>
-          <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--accent-amber)', lineHeight: 1.1 }}>{grandTotal.collected.toLocaleString()}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>All 3 buildings combined</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--accent-amber)', lineHeight: 1.2 }}>
+            {formatEggTrays(grandTotal.collected)}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+            {grandTotal.collected.toLocaleString()} total eggs (30/tray)
+          </div>
         </div>
+
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Broken</div>
-          <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--accent-rose)', lineHeight: 1.1 }}>{grandTotal.broken.toLocaleString()}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Damage across all sheds</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--accent-rose)', lineHeight: 1.2 }}>
+            {formatEggTrays(grandTotal.broken)}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+            {grandTotal.broken.toLocaleString()} broken across sheds
+          </div>
         </div>
+
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Net Available</div>
-          <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--accent-emerald)', lineHeight: 1.1 }}>{grandTotal.net.toLocaleString()}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Ready for sale / storage</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--accent-emerald)', lineHeight: 1.2 }}>
+            {formatEggTrays(grandTotal.net)}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+            {grandTotal.net.toLocaleString()} net ready for sale
+          </div>
         </div>
+
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Breakage Rate</div>
-          <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--accent-sky)', lineHeight: 1.1 }}>
+          <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--accent-sky)', lineHeight: 1.2 }}>
             {grandTotal.collected > 0 ? ((grandTotal.broken / grandTotal.collected) * 100).toFixed(1) : 0}%
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Farm-wide average</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Farm-wide average</div>
         </div>
+
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Laying Efficiency</div>
-          <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--accent-emerald)', lineHeight: 1.1 }}>
+          <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--accent-emerald)', lineHeight: 1.2 }}>
             {farmMetrics.layingRatePct || '0.0'}%
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)', fontWeight: 600 }}>(Daily Eggs ÷ Active Flock) × 100</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)', fontWeight: 600, marginTop: '0.25rem' }}>(Daily ÷ Flock) × 100</div>
         </div>
       </div>
 
@@ -167,9 +184,6 @@ export default function EggsPage({ onRefreshData }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem' }}>
         {buildingStats.map((bldg) => {
           const style = BUILDING_COLORS[bldg.id] || BUILDING_COLORS[1];
-          const breakagePct = bldg.total_collected > 0
-            ? ((bldg.total_broken / bldg.total_collected) * 100).toFixed(1)
-            : 0;
           const netPct = bldg.total_collected > 0
             ? ((bldg.total_net / bldg.total_collected) * 100).toFixed(0)
             : 0;
@@ -195,17 +209,28 @@ export default function EggsPage({ onRefreshData }) {
                 </span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+              {/* Trays & Remainder Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.625rem', marginBottom: '1rem' }}>
                 {[
                   { label: 'Collected', val: bldg.total_collected, color: style.color },
                   { label: 'Broken', val: bldg.total_broken, color: 'var(--accent-rose)' },
-                  { label: 'Net', val: bldg.total_net, color: 'var(--accent-emerald)' },
-                ].map(stat => (
-                  <div key={stat.label} style={{ textAlign: 'center', background: 'var(--bg-primary)', padding: '0.625rem', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: stat.color }}>{Number(stat.val).toLocaleString()}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-subtle)', fontWeight: 600 }}>{stat.label}</div>
-                  </div>
-                ))}
+                  { label: 'Net Ready', val: bldg.total_net, color: 'var(--accent-emerald)' },
+                ].map(stat => {
+                  const b = getTrayBreakdown(stat.val);
+                  return (
+                    <div key={stat.label} style={{ textAlign: 'center', background: 'var(--bg-primary)', padding: '0.625rem 0.375rem', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '0.9375rem', fontWeight: 900, color: stat.color, lineHeight: 1.2 }}>
+                        {b.trays > 0 ? `${b.trays} T` : ''}{b.trays > 0 && b.remainder > 0 ? ' + ' : ''}{b.remainder > 0 || b.trays === 0 ? `${b.remainder} e` : ''}
+                      </div>
+                      <div style={{ fontSize: '0.6875rem', color: 'var(--text-subtle)', fontWeight: 600, marginTop: '0.125rem' }}>
+                        {stat.label}
+                      </div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                        ({b.total.toLocaleString()} total)
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Progress bar: net yield */}
@@ -253,9 +278,9 @@ export default function EggsPage({ onRefreshData }) {
                 <th>Date</th>
                 <th>Building</th>
                 <th>Category</th>
-                <th>Eggs Collected</th>
+                <th>Eggs Collected (Trays + Loose)</th>
                 <th>Broken</th>
-                <th>Net Available</th>
+                <th>Net Available (Trays + Loose)</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -279,9 +304,21 @@ export default function EggsPage({ onRefreshData }) {
                         </span>
                       </td>
                       <td><span className="badge badge-sky">{item.category_name || 'Layers'}</span></td>
-                      <td style={{ fontWeight: 700, color: 'var(--accent-amber)' }}>{item.eggs_collected}</td>
-                      <td style={{ color: item.broken_eggs > 10 ? 'var(--accent-rose)' : 'var(--text-muted)' }}>{item.broken_eggs}</td>
-                      <td style={{ fontWeight: 700, color: 'var(--accent-emerald)' }}>{item.remaining_eggs}</td>
+                      <td style={{ fontWeight: 700, color: 'var(--accent-amber)' }}>
+                        {formatEggTrays(item.eggs_collected)}
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-subtle)', fontWeight: 400 }}>
+                          ({item.eggs_collected} total)
+                        </div>
+                      </td>
+                      <td style={{ color: item.broken_eggs > 10 ? 'var(--accent-rose)' : 'var(--text-muted)' }}>
+                        {formatEggTrays(item.broken_eggs)}
+                      </td>
+                      <td style={{ fontWeight: 700, color: 'var(--accent-emerald)' }}>
+                        {formatEggTrays(item.remaining_eggs)}
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-subtle)', fontWeight: 400 }}>
+                          ({item.remaining_eggs} total)
+                        </div>
+                      </td>
                       <td>
                         <button onClick={() => handleDelete(item.id)} className="btn btn-danger btn-sm">
                           <Trash2 size={14} />
